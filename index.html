@@ -302,20 +302,22 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .chip-name.gold{color:var(--gold-light)}
 
 /* DETAIL MODAL */
-#detail-overlay{position:fixed;inset:0;z-index:200;background:rgba(5,2,12,0.88);backdrop-filter:blur(16px);display:none;align-items:center;justify-content:center;padding:20px;}
-#detail-overlay.open{display:flex}
-#detail-panel{background:linear-gradient(160deg,#0f0820 0%,#0a0518 60%,#0d0620 100%);border:1px solid rgba(168,85,247,0.35);border-radius:24px;max-width:580px;width:100%;position:relative;box-shadow:0 0 0 1px rgba(255,110,180,0.08),0 32px 80px rgba(0,0,0,0.7),0 0 60px rgba(168,85,247,0.12);animation:detailIn 0.35s cubic-bezier(0.16,1,0.3,1);overflow:hidden;}
+/* Use visibility+opacity instead of display:none — avoids layout recalc on open */
+#detail-overlay{position:fixed;inset:0;z-index:200;background:rgba(5,2,12,0.88);display:flex;align-items:center;justify-content:center;padding:20px;visibility:hidden;opacity:0;transition:opacity 0.18s,visibility 0.18s;}
+#detail-overlay.open{visibility:visible;opacity:1;}
+#detail-panel{background:linear-gradient(160deg,#0f0820 0%,#0a0518 60%,#0d0620 100%);border:1px solid rgba(168,85,247,0.35);border-radius:24px;max-width:580px;width:100%;position:relative;box-shadow:0 0 0 1px rgba(255,110,180,0.08),0 32px 80px rgba(0,0,0,0.7),0 0 60px rgba(168,85,247,0.12);animation:detailIn 0.2s cubic-bezier(0.16,1,0.3,1);overflow:hidden;}
 #detail-panel::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(168,85,247,0.12) 0%,transparent 70%);pointer-events:none;z-index:0;}
 #detail-panel.has-fullimg{max-width:min(1020px,95vw);height:92vh;display:flex;flex-direction:row;align-items:flex-start;}
 .detail-fullimg-side{width:clamp(100px,45vw,480px);flex-shrink:0;position:relative;overflow:hidden;border-radius:24px 0 0 24px;background:var(--bg-deep);align-self:stretch;}
 .detail-fullimg-side img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;display:block;}
 #detail-content-wrap{padding:36px 32px 32px;flex:1;min-width:0;overflow-y:auto;max-height:92vh;position:relative;z-index:1;}
 #detail-panel:not(.has-fullimg) #detail-content-wrap{padding:40px 36px 36px;}
-@keyframes detailIn{from{opacity:0;transform:translateY(24px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
-.detail-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text-dim);border-radius:50%;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;z-index:10;backdrop-filter:blur(4px);}
+@keyframes detailIn{from{opacity:0;transform:translateY(16px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* Removed backdrop-filter from close button — not visible enough to justify the cost */
+.detail-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-dim);border-radius:50%;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:border-color 0.2s,color 0.2s,background 0.2s;z-index:10;}
 .detail-close:hover{border-color:var(--pink);color:var(--pink);background:rgba(255,110,180,0.1);box-shadow:0 0 12px rgba(255,110,180,0.2);}
-#day-overlay{position:fixed;inset:0;z-index:210;background:rgba(10,6,18,0.85);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px;}
-#day-overlay.open{display:flex}
+#day-overlay{position:fixed;inset:0;z-index:210;background:rgba(10,6,18,0.9);display:flex;align-items:center;justify-content:center;padding:20px;visibility:hidden;opacity:0;transition:opacity 0.15s,visibility 0.15s;}
+#day-overlay.open{visibility:visible;opacity:1;}
 #day-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:20px;padding:32px 30px 28px;width:100%;max-width:600px;max-height:88vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,0.6);}
 #day-panel::-webkit-scrollbar{width:4px}
 #day-panel::-webkit-scrollbar-thumb{background:var(--purple);border-radius:2px}
@@ -1000,113 +1002,133 @@ function renderWeekly(){
 }
 window.weekNav=function(dir){state.weekOffset+=dir;renderWeekly();};
 
+// Hoisted out of openDetail so it isn't redefined on every tap
+function _countdownBoxHTML(date, label, todayMsg, todayLabel, accentColor){
+  const isPast=daysUntil(date)<0, days=isPast?-1:daysUntil(date);
+  const borderColor=accentColor==='cyan'?'rgba(34,211,238,0.25)':'rgba(168,85,247,0.15)';
+  const labelColor=accentColor==='cyan'?'var(--cyan)':'var(--text-dim)';
+  const isoDate=date.toISOString();
+  let inner='';
+  if(isPast) inner=`<div style="font-size:22px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
+  else if(days===0) inner=`<div class="today-badge">${todayMsg}</div>`;
+  else {
+    const sc=secsUntil(date);const ss=Math.max(0,Math.floor(sc));
+    const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+    inner=`<div class="detail-countdown-nums">
+      ${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}
+      <div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div>
+      <div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div>
+      <div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div>
+    </div>`;
+  }
+  return `<div class="detail-countdown" style="border-color:${borderColor};flex:1" data-target-date="${isoDate}"><div class="detail-countdown-label" style="color:${labelColor}">${isPast?'✓ '+label:days===0?todayLabel:'Days Until '+label}</div>${inner}</div>`;
+}
+
 window.openDetail=function(e,forceType){
   document.getElementById('detail-back').style.display='none';
   if(typeof e==='string')try{e=JSON.parse(e)}catch{}
-  const overlay=document.getElementById('detail-overlay'),content=document.getElementById('detail-content');
-  const year=state.activeYear,isEvent=e.Type==='event',bd=parseMMDD(e.Birthday);
-  let h='';
-  if(isEvent){
-    if(e.ImageURL&&e.ImageURL.trim()){
-      h+=`<div class="detail-avatar event-avatar" style="background-image:url('${e.ImageURL}');background-size:cover;background-position:center;background-color:rgba(146,64,14,0.3);border:2px solid var(--gold);"></div>`;
-    } else {
-      h+=`<div class="detail-avatar event-avatar" style="display:flex;align-items:center;justify-content:center;font-size:42px;background:linear-gradient(135deg,rgba(146,64,14,0.3),rgba(251,191,36,0.2));border:2px solid var(--gold);">${e.Emoji||'⭐'}</div>`;
-    }
-  }
-  else if(!(e.AvatarURL&&e.AvatarURL.trim())){h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><div class="grad-circle">${e.Emoji||'⭐'}</div></div>`;}
-  else{h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><img src="${e.AvatarURL}" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'"></div>`;}
-  let badgesHTML='';
-  if(isEvent){
-    badgesHTML=`<span class="detail-type-badge event">Event</span>`;
-  } else if(forceType==='debut'){
-    badgesHTML=`<span class="detail-type-badge debut">Debut</span>`;
-  } else if(forceType==='both'){
-    badgesHTML=`<span class="detail-type-badge">Birthday</span> <span class="detail-type-badge debut">Debut</span>`;
-  } else {
-    badgesHTML=`<span class="detail-type-badge">Birthday</span>`;
-    if(e.DebutDate&&e.DebutDate.trim()&&bd){
-      const dp=e.DebutDate.split('/');
-      if(dp.length>=2&&parseInt(dp[0])-1===bd.month-1&&parseInt(dp[1])===bd.day){
-        badgesHTML+=` <span class="detail-type-badge debut">Debut</span>`;
-      }
-    }
-  }
-  h+=`<div style="text-align:center">${badgesHTML}`;
-  h+=`<div class="detail-name">${isEvent?(e.EventName||e.Name):e.Name}</div><div class="detail-gen">${e.Generation||''}${e.Branch?' · '+e.Branch:''}</div></div>`;
-  const infoRows=[];
-  if(bd)infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">${isEvent?'Date':'Birthday'}</span><span class="detail-info-value">${MONTH_NAMES[bd.month-1]} ${bd.day}</span></div>`);
-  if(e.DebutDate&&e.DebutDate.trim())infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">Debut</span><span class="detail-info-value">${e.DebutDate}</span></div>`);
-  if(e.Branch)infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">Branch</span><span class="detail-info-value">${e.Branch}</span></div>`);
-  if(infoRows.length)h+=`<div class="detail-info-section">${infoRows.join('')}</div>`;
-  if(!isArchive()&&bd){
-    // Builds a countdown box where every unit has data-unit so the live ticker can update it
-    function countdownBoxHTML(date, label, todayMsg, todayLabel, accentColor){
-      const isPast=daysUntil(date)<0, days=isPast?-1:daysUntil(date);
-      const borderColor=accentColor==='cyan'?'rgba(34,211,238,0.25)':'rgba(168,85,247,0.15)';
-      const labelColor=accentColor==='cyan'?'var(--cyan)':'var(--text-dim)';
-      const isoDate=date.toISOString();
-      let inner='';
-      if(isPast) inner=`<div style="font-size:22px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
-      else if(days===0) inner=`<div class="today-badge">${todayMsg}</div>`;
-      else {
-        const sc=secsUntil(date);const ss=Math.max(0,Math.floor(sc));
-        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
-        inner=`<div class="detail-countdown-nums">
-          ${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}
-          <div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div>
-          <div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div>
-          <div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div>
-        </div>`;
-      }
-      return `<div class="detail-countdown" style="border-color:${borderColor};flex:1" data-target-date="${isoDate}"><div class="detail-countdown-label" style="color:${labelColor}">${isPast?'✓ '+label:days===0?todayLabel:'Days Until '+label}</div>${inner}</div>`;
-    }
-    if(isEvent){
-      const eventDate=new Date(year,bd.month-1,bd.day);
-      const isPastEvent=daysUntil(eventDate)<0;
-      const sc=secsUntil(eventDate);const ss=Math.max(0,Math.floor(sc));
-      const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
-      h+=`<div class="detail-countdown" ${isPastEvent?'style="border-color:rgba(90,63,122,0.2)"':''} data-target-date="${eventDate.toISOString()}">`;
-      h+=`<div class="detail-countdown-label">${isPastEvent?'Event Completed':daysUntil(eventDate)===0?'🎉 TODAY!':'Days Until Event'}</div>`;
-      if(isPastEvent) h+=`<div style="font-size:28px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
-      else if(daysUntil(eventDate)===0) h+=`<div class="today-badge">${e.EventName||e.Name} is Live!</div>`;
-      else h+=`<div class="detail-countdown-nums">${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div><div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div><div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div></div>`;
-      h+=`</div>`;
-    } else {
-      const bdNext=nextOccurrence(e,year);
-      const hasDebut=e.DebutDate&&e.DebutDate.trim();
-      if(hasDebut){
-        const dp=e.DebutDate.split('/');
-        const debutMonth=parseInt(dp[0])-1, debutDay=parseInt(dp[1]);
-        const debutNext=new Date(year,debutMonth,debutDay);
-        if(daysUntil(debutNext)<0) {const ny=new Date(year+1,debutMonth,debutDay); if(daysUntil(ny)>=0) debutNext.setFullYear(year+1);}
-        h+=`<div style="display:flex;flex-direction:column;gap:10px;margin-top:0">`;
-        h+=countdownBoxHTML(bdNext,'Birthday','Happy Birthday! 🎉','🎉 TODAY!','purple');
-        h+=countdownBoxHTML(debutNext,'Anniversary','Happy Anniversary! 🎊','🎊 TODAY!','cyan');
-        h+=`</div>`;
-      } else {
-        const sc=secsUntil(bdNext);const ss=Math.max(0,Math.floor(sc));
-        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
-        const days=daysUntil(bdNext);
-        h+=`<div class="detail-countdown" data-target-date="${bdNext.toISOString()}"><div class="detail-countdown-label">${days===0?'🎉 TODAY!':'Days Until Birthday'}</div>`;
-        if(days===0) h+=`<div class="today-badge">Happy Birthday! 🎉</div>`;
-        else h+=`<div class="detail-countdown-nums">${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div><div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div><div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div></div>`;
-        h+=`</div>`;
-      }
-    }
-  }
+  // Show overlay immediately so the tap feels instant, then build content
+  const overlay=document.getElementById('detail-overlay');
   const panel=document.getElementById('detail-panel');
   const imgSide=document.getElementById('detail-fullimg-side');
-  if(!isEvent&&e.ImageURL&&e.ImageURL.trim()){
-    imgSide.innerHTML=`<img src="${e.ImageURL}" alt="${e.Name}" onerror="this.parentElement.style.display='none';document.getElementById('detail-panel').classList.remove('has-fullimg');">`;
-    imgSide.style.display='block';
-    panel.classList.add('has-fullimg');
-  } else {
+  const content=document.getElementById('detail-content');
+
+  // Handle full image side — hide first so panel shows at correct size instantly
+  if(!e.Type||e.Type!=='event'&&e.ImageURL&&e.ImageURL.trim()){
     imgSide.style.display='none';
-    imgSide.innerHTML='';
     panel.classList.remove('has-fullimg');
   }
-  content.innerHTML=h;
   overlay.classList.add('open');
+
+  // Build HTML synchronously but yield to browser for the open transition first
+  requestAnimationFrame(()=>{
+    const year=state.activeYear,isEvent=e.Type==='event',bd=parseMMDD(e.Birthday);
+    let h='';
+    if(isEvent){
+      if(e.ImageURL&&e.ImageURL.trim()){
+        h+=`<div class="detail-avatar event-avatar" style="background-image:url('${e.ImageURL}');background-size:cover;background-position:center;background-color:rgba(146,64,14,0.3);border:2px solid var(--gold);"></div>`;
+      } else {
+        h+=`<div class="detail-avatar event-avatar" style="display:flex;align-items:center;justify-content:center;font-size:42px;background:linear-gradient(135deg,rgba(146,64,14,0.3),rgba(251,191,36,0.2));border:2px solid var(--gold);">${e.Emoji||'⭐'}</div>`;
+      }
+    }
+    else if(!(e.AvatarURL&&e.AvatarURL.trim())){h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><div class="grad-circle">${e.Emoji||'⭐'}</div></div>`;}
+    else{h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><img src="${e.AvatarURL}" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'"></div>`;}
+    let badgesHTML='';
+    if(isEvent){
+      badgesHTML=`<span class="detail-type-badge event">Event</span>`;
+    } else if(forceType==='debut'){
+      badgesHTML=`<span class="detail-type-badge debut">Debut</span>`;
+    } else if(forceType==='both'){
+      badgesHTML=`<span class="detail-type-badge">Birthday</span> <span class="detail-type-badge debut">Debut</span>`;
+    } else {
+      badgesHTML=`<span class="detail-type-badge">Birthday</span>`;
+      if(e.DebutDate&&e.DebutDate.trim()&&bd){
+        const dp=e.DebutDate.split('/');
+        if(dp.length>=2&&parseInt(dp[0])-1===bd.month-1&&parseInt(dp[1])===bd.day){
+          badgesHTML+=` <span class="detail-type-badge debut">Debut</span>`;
+        }
+      }
+    }
+    h+=`<div style="text-align:center">${badgesHTML}`;
+    h+=`<div class="detail-name">${isEvent?(e.EventName||e.Name):e.Name}</div><div class="detail-gen">${e.Generation||''}${e.Branch?' · '+e.Branch:''}</div></div>`;
+    const infoRows=[];
+    if(bd)infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">${isEvent?'Date':'Birthday'}</span><span class="detail-info-value">${MONTH_NAMES[bd.month-1]} ${bd.day}</span></div>`);
+    if(e.DebutDate&&e.DebutDate.trim())infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">Debut</span><span class="detail-info-value">${e.DebutDate}</span></div>`);
+    if(e.Branch)infoRows.push(`<div class="detail-info-row"><span class="detail-info-label">Branch</span><span class="detail-info-value">${e.Branch}</span></div>`);
+    if(infoRows.length)h+=`<div class="detail-info-section">${infoRows.join('')}</div>`;
+    if(!isArchive()&&bd){
+      if(isEvent){
+        const eventDate=new Date(year,bd.month-1,bd.day);
+        const isPastEvent=daysUntil(eventDate)<0;
+        const sc=secsUntil(eventDate);const ss=Math.max(0,Math.floor(sc));
+        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+        h+=`<div class="detail-countdown" ${isPastEvent?'style="border-color:rgba(90,63,122,0.2)"':''} data-target-date="${eventDate.toISOString()}">`;
+        h+=`<div class="detail-countdown-label">${isPastEvent?'Event Completed':daysUntil(eventDate)===0?'🎉 TODAY!':'Days Until Event'}</div>`;
+        if(isPastEvent) h+=`<div style="font-size:28px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
+        else if(daysUntil(eventDate)===0) h+=`<div class="today-badge">${e.EventName||e.Name} is Live!</div>`;
+        else h+=`<div class="detail-countdown-nums">${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div><div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div><div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div></div>`;
+        h+=`</div>`;
+      } else {
+        const bdNext=nextOccurrence(e,year);
+        const hasDebut=e.DebutDate&&e.DebutDate.trim();
+        if(hasDebut){
+          const dp=e.DebutDate.split('/');
+          const debutMonth=parseInt(dp[0])-1, debutDay=parseInt(dp[1]);
+          const debutNext=new Date(year,debutMonth,debutDay);
+          if(daysUntil(debutNext)<0) {const ny=new Date(year+1,debutMonth,debutDay); if(daysUntil(ny)>=0) debutNext.setFullYear(year+1);}
+          h+=`<div style="display:flex;flex-direction:column;gap:10px;margin-top:0">`;
+          h+=_countdownBoxHTML(bdNext,'Birthday','Happy Birthday! 🎉','🎉 TODAY!','purple');
+          h+=_countdownBoxHTML(debutNext,'Anniversary','Happy Anniversary! 🎊','🎊 TODAY!','cyan');
+          h+=`</div>`;
+        } else {
+          const sc=secsUntil(bdNext);const ss=Math.max(0,Math.floor(sc));
+          const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+          const days=daysUntil(bdNext);
+          h+=`<div class="detail-countdown" data-target-date="${bdNext.toISOString()}"><div class="detail-countdown-label">${days===0?'🎉 TODAY!':'Days Until Birthday'}</div>`;
+          if(days===0) h+=`<div class="today-badge">Happy Birthday! 🎉</div>`;
+          else h+=`<div class="detail-countdown-nums">${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div><div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div><div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div></div>`;
+          h+=`</div>`;
+        }
+      }
+    }
+    content.innerHTML=h;
+
+    // Load full image lazily after content is painted
+    if(!isEvent&&e.ImageURL&&e.ImageURL.trim()){
+      const img=new Image();
+      img.onload=()=>{
+        imgSide.innerHTML=`<img src="${e.ImageURL}" alt="${e.Name}">`;
+        imgSide.style.display='block';
+        panel.classList.add('has-fullimg');
+      };
+      img.onerror=()=>{imgSide.style.display='none';};
+      img.src=e.ImageURL;
+    } else {
+      imgSide.style.display='none';
+      imgSide.innerHTML='';
+      panel.classList.remove('has-fullimg');
+    }
+  });
 };
 document.getElementById('detail-close').addEventListener('click',()=>{document.getElementById('detail-overlay').classList.remove('open');document.getElementById('detail-panel').classList.remove('has-fullimg');});
 document.getElementById('detail-overlay').addEventListener('click',function(e){if(e.target===this){this.classList.remove('open');document.getElementById('detail-panel').classList.remove('has-fullimg');}});
