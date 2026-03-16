@@ -214,7 +214,7 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .timeline-scroll::-webkit-scrollbar{height:5px}
 .timeline-scroll::-webkit-scrollbar-track{background:transparent}
 .timeline-scroll::-webkit-scrollbar-thumb{background:var(--border-bright);border-radius:2px}
-.timeline-card{flex:0 0 auto;width:175px;background:var(--bg-glass);border:1px solid var(--border);border-radius:14px;padding:16px 13px;text-align:center;cursor:pointer;transition:all 0.2s;backdrop-filter:blur(8px);}
+.timeline-card{flex:0 0 auto;width:175px;background:rgba(17,13,31,0.95);border:1px solid var(--border);border-radius:14px;padding:16px 13px;text-align:center;cursor:pointer;transition:border-color 0.2s,transform 0.2s,box-shadow 0.2s;}
 .timeline-card:hover{border-color:var(--border-bright);transform:translateY(-2px);box-shadow:var(--shadow-purple)}
 .timeline-card.event-card{border-color:rgba(251,191,36,0.3)}
 .timeline-card.event-card:hover{border-color:var(--gold);box-shadow:var(--shadow-gold)}
@@ -869,23 +869,45 @@ function renderTimeline(){
   const pane=document.getElementById('pane-timeline');
   const year=state.activeYear;
   const data=getFilteredData(year);
+  let hasAny=false;
   let html='';
   if(isArchive())html+=`<div style="text-align:center;margin-bottom:16px"><span class="archive-label">📁 Archive: ${year}</span></div>`;
+
+  // Pre-parse all birthdays once — avoids calling parseMMDD 2-3x per entry inside the loop
+  const parsed=data.map(e=>({e, bd:parseMMDD(e.Birthday)}));
+
   for(let m=0;m<12;m++){
-    const me=data.filter(e=>{const bd=parseMMDD(e.Birthday);return bd&&(bd.month-1)===m;}).sort((a,b)=>parseMMDD(a.Birthday).day-parseMMDD(b.Birthday).day);
-    const debutMe=getDebutEntries(data,m);
+    // Birthday/event entries for this month
+    const me=parsed.filter(({bd})=>bd&&(bd.month-1)===m)
+      .sort((a,b)=>a.bd.day-b.bd.day)
+      .map(({e})=>e);
+
+    // Debut entries — single pass, no separate getDebutEntries call
+    const debutMe=[];
+    data.forEach(e=>{
+      if(!e.DebutDate||!e.DebutDate.trim())return;
+      const p=e.DebutDate.split('/');
+      if(p.length<2||parseInt(p[0])-1!==m)return;
+      const dd=parseInt(p[1]);
+      const bd=parseMMDD(e.Birthday);
+      if(bd&&(bd.month-1)===m&&bd.day===dd)return; // already shown as birthday row
+      debutMe.push({...e,_isDebutRow:true,_debutDay:dd});
+    });
+
     const allMe=[...me,...debutMe].sort((a,b)=>{
       const da=a._isDebutRow?a._debutDay:parseMMDD(a.Birthday)?.day||0;
       const db=b._isDebutRow?b._debutDay:parseMMDD(b.Birthday)?.day||0;
       return da-db;
     });
     if(!allMe.length)continue;
+    hasAny=true;
     html+=`<div class="timeline-month"><div class="timeline-month-title">${MONTH_NAMES[m]} <span style="color:var(--text-muted);font-size:13px;font-family:'Zen Kaku Gothic New'">${allMe.length} entries</span></div><div class="timeline-scroll">`;
     allMe.forEach(e=>{
       const isDebutRow=e._isDebutRow===true;
+      // Reuse pre-parsed bd where possible
       const bd=isDebutRow?{month:m+1,day:e._debutDay}:parseMMDD(e.Birthday);
       const isEvent=e.Type==='event';
-      const tlBd=parseMMDD(e.Birthday);
+      const tlBd=isDebutRow?parseMMDD(e.Birthday):bd; // only re-parse for debut rows
       const tlIsBoth=!isDebutRow&&!isEvent&&e.DebutDate&&e.DebutDate.trim()&&tlBd&&(()=>{const p=e.DebutDate.split('/');return p.length>=2&&parseInt(p[0])-1===m&&parseInt(p[1])===tlBd.day;})();
       const cardClass=tlIsBoth?'both-card':isDebutRow?'debut-card':isEvent?'event-card':'';
       const cleanE={...e};delete cleanE._isDebutRow;delete cleanE._debutDay;
@@ -900,7 +922,7 @@ function renderTimeline(){
     });
     html+=`</div></div>`;
   }
-  if(!html.includes('timeline-month'))html+=`<div class="empty-state"><span class="emoji">🔍</span>No entries found</div>`;
+  if(!hasAny)html+=`<div class="empty-state"><span class="emoji">🔍</span>No entries found</div>`;
   pane.innerHTML=html;
 }
 
