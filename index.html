@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>holoIndex — Hololive Birthday & Event Calendar</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#a855f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="holoIndex">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Subsetted to only weights actually used; display=swap prevents render blocking -->
@@ -1436,31 +1443,23 @@ function refreshAll(){_renderKeys.monthly=_renderKeys.timeline=_renderKeys.upcom
 loadHardcodedData();
 </script>
 <script>
-// Register Service Worker for stale-while-revalidate CSV caching
-// On repeat visits, data loads instantly from cache while refreshing in background
+// Register Service Worker (sw.js) for full offline support + CSV caching
 if('serviceWorker' in navigator){
-  // Inline the SW as a blob URL so it works without a separate sw.js file
-  const swCode=`
-const CACHE='holoindex-csv-v1';
-const CSV_PATTERN=/docs\\.google\\.com.*output=csv/;
-self.addEventListener('fetch',e=>{
-  if(!CSV_PATTERN.test(e.request.url))return;
-  e.respondWith(
-    caches.open(CACHE).then(cache=>
-      cache.match(e.request).then(cached=>{
-        const fresh=fetch(e.request).then(resp=>{
-          if(resp.ok)cache.put(e.request,resp.clone());
-          return resp;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/holoIndex/sw.js')
+      .then(reg => {
+        // When a new SW is waiting, prompt the user to refresh
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          newSW.addEventListener('statechange', () => {
+            if(newSW.state === 'installed' && navigator.serviceWorker.controller){
+              showToast('Update available — refresh to get latest data');
+            }
+          });
         });
-        return cached||fresh; // serve cache instantly, refresh in background
       })
-    )
-  );
-});
-`;
-  const blob=new Blob([swCode],{type:'application/javascript'});
-  const swUrl=URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl).catch(()=>{});
+      .catch(() => {}); // silently fail if SW not supported (e.g. file://)
+  });
 }
 </script>
 </body>

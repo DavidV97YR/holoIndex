@@ -10,8 +10,8 @@ const DATA_CACHE  = 'holoindex-data-v1';
 // Files that make up the app shell — cached on install for offline use
 // Update SHELL_CACHE version string above whenever index.html changes
 const SHELL_FILES = [
-  './index.html',
-  './manifest.json'
+  '/holoIndex/',
+  '/holoIndex/manifest.json'
 ];
 
 const CSV_PATTERN = /docs\.google\.com.*output=csv/;
@@ -59,7 +59,7 @@ self.addEventListener('fetch', event => {
   }
 
   // App shell HTML — cache-first with background refresh
-  if (request.mode === 'navigate' || SHELL_FILES.some(f => url.endsWith(f.replace('./', '')))) {
+  if (request.mode === 'navigate' || SHELL_FILES.some(f => url.includes(f))) {
     event.respondWith(cacheFirst(request, SHELL_CACHE));
     return;
   }
