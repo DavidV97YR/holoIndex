@@ -6,8 +6,9 @@
 <title>holoIndex — Hololive Birthday & Event Calendar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" rel="stylesheet"></noscript>
+<!-- Subsetted to only weights actually used; display=swap prevents render blocking -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
 <style>
 :root {
   --bg-deep: #0a0612;
@@ -625,17 +626,47 @@ setInterval(function(){
   }
 },1000);
 
-// Auto-refresh just after midnight so getToday() always returns the correct day
+// Auto-refresh just after midnight — resets TODAY cache and daysUntil memoization
 (function scheduleMidnightRefresh(){
   const now=new Date();
   const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,5,0);
-  setTimeout(()=>{renderAll();scheduleMidnightRefresh();},tomorrow-now);
+  setTimeout(()=>{
+    _TODAY=_makeToday();
+    _daysCache.clear();
+    _renderKeys.monthly=_renderKeys.timeline=_renderKeys.upcoming=_renderKeys.weekly=null;
+    renderAll();
+    scheduleMidnightRefresh();
+  },tomorrow-now);
 })();
 
-// Returns today at midnight local time
-function getToday(){const t=new Date();t.setHours(0,0,0,0);return t;}
-// Returns whole-number days between a date and today — uses Date.UTC to avoid DST issues
-function daysUntil(date){const now=getToday();const d=new Date(date);d.setHours(0,0,0,0);return Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()))/(1000*60*60*24));}
+// Returns today at midnight local time — cached as module-level constant, refreshed at midnight
+function _makeToday(){const t=new Date();t.setHours(0,0,0,0);return t;}
+let _TODAY=_makeToday();
+function getToday(){return _TODAY;}
+
+// Memoized parseMMDD — same string always returns same result; no need to reparse
+const _mmddCache=new Map();
+function parseMMDD(str){
+  if(!str)return null;
+  if(_mmddCache.has(str))return _mmddCache.get(str);
+  const parts=str.split('/');
+  if(parts.length<2)return null;
+  const result={month:parseInt(parts[0]),day:parseInt(parts[1])};
+  _mmddCache.set(str,result);
+  return result;
+}
+
+// Memoized daysUntil — same date string returns same value within a given day
+const _daysCache=new Map();
+function daysUntil(date){
+  const d=new Date(date);d.setHours(0,0,0,0);
+  const key=d.getTime();
+  if(_daysCache.has(key))return _daysCache.get(key);
+  const now=_TODAY;
+  const result=Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()))/(1000*60*60*24));
+  _daysCache.set(key,result);
+  return result;
+}
 // Returns exact seconds until a date (fractional ok); negative if past
 function secsUntil(date){return (new Date(date)-new Date())/1000;}
 // Returns "Xd Xh Xm Xs" breakdown string for ≤7 days remaining (totalSecs > 0)
@@ -653,7 +684,7 @@ function shortCountdownStr(totalSecs){
 // For events (one-time): returns the fixed date, or null if already past.
 // For birthdays/debuts (recurring): rolls forward to next year if past.
 function nextOccurrence(entry,year){const bd=parseMMDD(entry.Birthday);if(!bd)return null;const now=getToday();let d=new Date(year,bd.month-1,bd.day);d.setHours(0,0,0,0);if(entry.Type==='event')return d<now?null:d;if(d<now)d=new Date(year+1,bd.month-1,bd.day);return d;}
-const TODAY=getToday();
+const TODAY=_TODAY;
 const CURRENT_YEAR=TODAY.getFullYear();
 const START_YEAR=2023;
 let state={allData:{},activeYear:CURRENT_YEAR,view:'monthly',branch:'All',eventsOnly:false,search:'',weekOffset:0};
@@ -667,8 +698,6 @@ const HARDCODED_SOURCES={
     2023:'https://docs.google.com/spreadsheets/d/e/2PACX-1vQzGUxoo0coIXINtmeUHVir6XD_NL1bddYvODUX7y8fafDW5OV-dV0rcFwof0V6Zw/pub?gid=1820299975&single=true&output=csv',
   }
 };
-
-function parseMMDD(str){if(!str)return null;const [m,d]=str.split('/').map(Number);return{month:m,day:d};}
 
 // Memoized filtered data — avoids re-filtering on every render call within the same state
 let _filteredCache={key:null,data:null};
@@ -762,7 +791,7 @@ function entryRowHTML(e,year,showCountdown=true,compact=false){
   const subLabel='';
   const cleanE={...e};delete cleanE._isDebutRow;delete cleanE._debutDay;
   const rowFt=isBoth?"'both'":'undefined';
-  return `<div class="bday-row-item ${rowClass}" onclick="openDetail(${JSON.stringify(cleanE).replace(/"/g,'&quot;')},${rowFt})">
+  return `<div class="bday-row-item ${rowClass}" onclick="${_oc(cleanE,isBoth?'both':undefined)}">
     <div class="bday-day-badge ${badgeClass}">${bd?bd.day:'?'}</div>
     <div class="bday-avatar">${avInner}</div>
     <span class="bday-name ${nameClass}" data-name="${displayName}">${displayName}</span>
@@ -776,6 +805,36 @@ function renderMonthly(){
   const year=state.activeYear;
   const data=getFilteredData(year);
   let html='';
+
+  // ── Single-pass pre-grouping — replaces 24+ separate getDebutEntries/filter calls ──
+  // byMonth[m] = {bdEntries:[], debutEntries:[], debutDays:[], birthdayDays:[], eventDays:[]}
+  const byMonth=Array.from({length:12},()=>({bdEntries:[],debutEntries:[],debutDays:[],birthdayDays:[],eventDays:[]}));
+  data.forEach(e=>{
+    const bd=parseMMDD(e.Birthday);
+    if(bd){
+      const m=bd.month-1;
+      byMonth[m].bdEntries.push(e);
+      if(e.Type==='event') byMonth[m].eventDays.push(bd.day);
+      else byMonth[m].birthdayDays.push(bd.day);
+    }
+    if(e.DebutDate&&e.DebutDate.trim()){
+      const p=e.DebutDate.split('/');
+      if(p.length>=2){
+        const dm=parseInt(p[0])-1,dd=parseInt(p[1]);
+        byMonth[dm].debutDays.push(dd);
+        if(!(bd&&(bd.month-1)===dm&&bd.day===dd)){
+          byMonth[dm].debutEntries.push({...e,_isDebutRow:true,_debutDay:dd});
+        }
+      }
+    }
+  });
+  // Sort each month's entries by day
+  byMonth.forEach(m=>{
+    m.bdEntries.sort((a,b)=>parseMMDD(a.Birthday).day-parseMMDD(b.Birthday).day);
+  });
+
+  // Build day map for O(1) calendar cell lookups
+  _buildDayMap(data,year);
 
   if(!isArchive()){
     // ── Next Up Banner ──
@@ -805,8 +864,10 @@ function renderMonthly(){
       }
       const avHtml=nx.AvatarURL&&nx.AvatarURL.trim()?`<img src="${nx.AvatarURL}" loading="lazy" alt="${nx.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:26px">${nx.Emoji||'⭐'}</span>`;
       const displayNm=isEv?(nx.EventName||nx.Name):nx.Name;
-      const dateStr=nd===0?'Today!':nx.nextDate.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-      html+=`<div class="next-up-banner${isEv?' is-event-banner':''}" id="next-up-banner" data-target-date="${nx.nextDate.toISOString()}" onclick="openDetail(${JSON.stringify(cleanNx).replace(/"/g,'&quot;')})">
+      // Use Intl instead of toLocaleDateString
+      const nubFmt=new Intl.DateTimeFormat('en-US',{month:'long',day:'numeric',year:'numeric'});
+      const dateStr=nd===0?'Today!':nubFmt.format(nx.nextDate);
+      html+=`<div class="next-up-banner${isEv?' is-event-banner':''}" id="next-up-banner" data-target-date="${nx.nextDate.toISOString()}" onclick="${_oc(cleanNx)}">
         <div><div class="nub-label">${nd===0?'Today':'Next Up'}</div><div class="nub-avatar">${avHtml}</div></div>
         <div class="nub-info"><div class="nub-name">${displayNm}</div><div class="nub-date">${dateStr}</div></div>
         <div class="nub-countdown" id="nub-countdown-units">${cdHtml}</div>
@@ -815,20 +876,16 @@ function renderMonthly(){
     })();
 
     const curMonth=getToday().getMonth();
-    const monthEntries=data.filter(e=>{const bd=parseMMDD(e.Birthday);return bd&&(bd.month-1)===curMonth;}).sort((a,b)=>parseMMDD(a.Birthday).day-parseMMDD(b.Birthday).day);
-    const birthdayDays=monthEntries.filter(e=>e.Type!=='event').map(e=>parseMMDD(e.Birthday).day);
-    const eventDays=monthEntries.filter(e=>e.Type==='event').map(e=>parseMMDD(e.Birthday).day);
-    const debutDays_feat=data.filter(e=>e.DebutDate&&e.DebutDate.trim()).filter(e=>{const p=e.DebutDate.split('/');return p.length>=2&&parseInt(p[0])-1===curMonth;}).map(e=>{const p=e.DebutDate.split('/');return parseInt(p[1]);});
+    const {bdEntries:monthEntries,debutEntries:debutEntries_feat,debutDays:debutDays_feat,birthdayDays,eventDays}=byMonth[curMonth];
     html+=`<div class="this-month-divider">✶ This Month ✶</div>`;
     html+=`<div class="this-month-panel"><div class="this-month-inner">`;
     html+=`<div class="this-month-cal">`;
-    const totalFeatCount=monthEntries.length+(data.filter(e=>{if(!e.DebutDate||!e.DebutDate.trim())return false;const p=e.DebutDate.split('/');return p.length>=2&&parseInt(p[0])-1===curMonth;}).length);
-html+=`<div class="this-month-cal-header"><div class="this-month-cal-title">${MONTH_NAMES[curMonth]}</div><div class="this-month-cal-year">${year}</div><div class="this-month-cal-count">${totalFeatCount} item${totalFeatCount!==1?'s':''}</div></div>`;
+    const totalFeatCount=monthEntries.length+debutEntries_feat.length;
+    html+=`<div class="this-month-cal-header"><div class="this-month-cal-title">${MONTH_NAMES[curMonth]}</div><div class="this-month-cal-year">${year}</div><div class="this-month-cal-count">${totalFeatCount} item${totalFeatCount!==1?'s':''}</div></div>`;
     html+=`<div class="this-month-cal-body">${renderMiniCal(year,curMonth,birthdayDays,eventDays,true,monthEntries,debutDays_feat)}</div>`;
     html+=`</div>`;
     html+=`<div class="this-month-list">`;
     html+=`<div class="this-month-list-header">Birthdays &amp; Events</div>`;
-    const debutEntries_feat=getDebutEntries(data,curMonth);
     const allFeatEntries=[...monthEntries,...debutEntries_feat].sort((a,b)=>{
       const da=a._isDebutRow?a._debutDay:parseMMDD(a.Birthday)?.day||0;
       const db=b._isDebutRow?b._debutDay:parseMMDD(b.Birthday)?.day||0;
@@ -841,28 +898,47 @@ html+=`<div class="this-month-cal-header"><div class="this-month-cal-title">${MO
     html+=`<div style="text-align:center;margin-bottom:16px"><span class="archive-label">📁 Archive: ${year}</span></div>`;
   }
 
-  html+=`<div class="months-grid">`;
+  // Render month card shells immediately; fill entries lazily via IntersectionObserver
+  html+=`<div class="months-grid" id="months-grid-inner">`;
   for(let m=0;m<12;m++){
-    const monthEntries=data.filter(e=>{const bd=parseMMDD(e.Birthday);return bd&&(bd.month-1)===m;}).sort((a,b)=>parseMMDD(a.Birthday).day-parseMMDD(b.Birthday).day);
-    const birthdayDays=monthEntries.filter(e=>e.Type!=='event').map(e=>parseMMDD(e.Birthday).day);
-    const eventDays=monthEntries.filter(e=>e.Type==='event').map(e=>parseMMDD(e.Birthday).day);
-    const debutDays_grid=data.filter(e=>e.DebutDate&&e.DebutDate.trim()).filter(e=>{const p=e.DebutDate.split('/');return p.length>=2&&parseInt(p[0])-1===m;}).map(e=>{const p=e.DebutDate.split('/');return parseInt(p[1]);});
-    html+=`<div class="month-card">`;
-    html+=`<div class="month-card-header"><div class="month-card-name">${MONTH_NAMES[m]}</div><div class="month-card-count">${monthEntries.length}</div></div>`;
-    html+=`<div class="month-card-cal">${renderMiniCal(year,m,birthdayDays,eventDays,false,monthEntries,debutDays_grid)}</div>`;
-    html+=`<div class="month-entries">`;
-    const debutEntries_grid=getDebutEntries(data,m);
-    const allGridEntries=[...monthEntries,...debutEntries_grid].sort((a,b)=>{
-      const da=a._isDebutRow?a._debutDay:parseMMDD(a.Birthday)?.day||0;
-      const db=b._isDebutRow?b._debutDay:parseMMDD(b.Birthday)?.day||0;
-      return da-db;
-    });
-    allGridEntries.forEach(e=>html+=entryRowHTML(e,year,true,true));
-    if(!allGridEntries.length)html+=`<div style="font-size:11px;color:var(--text-muted);padding:4px 8px;">No entries</div>`;
-    html+=`</div></div>`;
+    const {bdEntries:me,debutEntries:de,debutDays:dd,birthdayDays:bdays,eventDays:edays}=byMonth[m];
+    const totalCount=me.length+de.length;
+    html+=`<div class="month-card" data-month="${m}">`;
+    html+=`<div class="month-card-header"><div class="month-card-name">${MONTH_NAMES[m]}</div><div class="month-card-count">${totalCount}</div></div>`;
+    html+=`<div class="month-card-cal">${renderMiniCal(year,m,bdays,edays,false,me,dd)}</div>`;
+    // Placeholder for entries — filled by IntersectionObserver when card scrolls into view
+    html+=`<div class="month-entries" data-entries-pending="1"></div>`;
+    html+=`</div>`;
   }
   html+=`</div>`;
   pane.innerHTML=html;
+
+  // Lazily fill entry rows as month cards enter viewport
+  const _monthByMonth=byMonth; // capture for observer closure
+  const _yearSnap=year;
+  const observer=new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting)return;
+      const card=entry.target;
+      const m=parseInt(card.dataset.month);
+      const entriesEl=card.querySelector('.month-entries[data-entries-pending]');
+      if(!entriesEl)return;
+      entriesEl.removeAttribute('data-entries-pending');
+      observer.unobserve(card);
+      const {bdEntries:me,debutEntries:de}=_monthByMonth[m];
+      const allGridEntries=[...me,...de].sort((a,b)=>{
+        const da=a._isDebutRow?a._debutDay:parseMMDD(a.Birthday)?.day||0;
+        const db=b._isDebutRow?b._debutDay:parseMMDD(b.Birthday)?.day||0;
+        return da-db;
+      });
+      let rowHtml='';
+      allGridEntries.forEach(e=>rowHtml+=entryRowHTML(e,_yearSnap,true,true));
+      if(!allGridEntries.length)rowHtml=`<div style="font-size:11px;color:var(--text-muted);padding:4px 8px;">No entries</div>`;
+      entriesEl.innerHTML=rowHtml;
+    });
+  },{rootMargin:'200px'}); // pre-load 200px before card enters view
+
+  pane.querySelectorAll('.month-card[data-month]').forEach(card=>observer.observe(card));
 }
 
 function renderTimeline(){
@@ -913,7 +989,7 @@ function renderTimeline(){
       const cleanE={...e};delete cleanE._isDebutRow;delete cleanE._debutDay;
       const bdAlsoMatchesTl=tlBd&&tlBd.month-1===m&&tlBd.day===e._debutDay;
       const ft=tlIsBoth?'both':isDebutRow?(bdAlsoMatchesTl?'both':'debut'):undefined;
-      html+=`<div class="timeline-card ${cardClass}" onclick="openDetail(${JSON.stringify(cleanE).replace(/"/g,'&quot;')},${ft?`'${ft}'`:'undefined'})">`;
+      html+=`<div class="timeline-card ${cardClass}" onclick="${_oc(cleanE,ft)}">`;
       html+=`<div class="tl-date-circle">${bd.day}</div><div class="tl-avatar">`;
       html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
       html+=`</div><div class="tl-name ${tlIsBoth?'both-name':''}">${isEvent?(e.EventName||e.Name):e.Name}</div>`;
@@ -935,7 +1011,7 @@ function renderUpcoming(){
     let html=`<div style="text-align:center;margin-bottom:16px"><span class="archive-label">📁 Archive: ${year}</span></div><div class="upcoming-list">`;
     sorted.forEach(e=>{
       const bd=parseMMDD(e.Birthday),isEvent=e.Type==='event';
-      html+=`<div class="upcoming-item ${isEvent?'event-item':''}" onclick="openDetail(${JSON.stringify(e).replace(/"/g,'&quot;')})"><div class="up-avatar">`;
+      html+=`<div class="upcoming-item ${isEvent?'event-item':''}" onclick="${_oc(e)}"><div class="up-avatar">`;
       html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
       html+=`</div><div class="up-info"><div class="up-name">${isEvent?(e.EventName||e.Name):e.Name}</div><div class="up-sub">${e.Generation||e.Branch}${bd?` • ${MONTH_NAMES[bd.month-1]} ${bd.day}`:''}</div></div><span class="up-time muted">${bd?`${bd.month}/${bd.day}`:''}</span></div>`;
     });
@@ -980,7 +1056,7 @@ function renderUpcoming(){
     const upTc=d===0?'teal':isDebutRow_up?'cyan':isEvent?'gold':'';
     const cleanEup={...e};delete cleanEup._isDebutRow;delete cleanEup._debutDay;delete cleanEup.nextDate;delete cleanEup.daysAway;
     const upFt=upIsBoth?'both':isDebutRow_up?(bdAlsoMatchesUp?'both':'debut'):undefined;
-    h+=`<div class="upcoming-item ${itemClass}" onclick="openDetail(${JSON.stringify(cleanEup).replace(/"/g,'&quot;')},${upFt?`'${upFt}'`:'undefined'})"><div class="up-avatar">`;
+    h+=`<div class="upcoming-item ${itemClass}" onclick="${_oc(cleanEup,upFt)}"><div class="up-avatar">`;
     h+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
     var upNameInner=upIsBoth?'<span style="background:linear-gradient(90deg,#ff6eb4,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block">'+upName+'</span>':upName;
     var upTimeEl=upIsBoth?'<span class="up-time" style="background:linear-gradient(90deg,#ff6eb4,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block">'+timeStr+'</span>':'<span class="up-time '+upTc+'">'+timeStr+'</span>';
@@ -989,16 +1065,23 @@ function renderUpcoming(){
   pane.innerHTML=h+`</div>`;
 }
 
+// Shared Intl formatter for weekly range header — instantiated once, reused
+const _weekRangeFmt=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
+// Week render cache keyed by "year|offset|filterKey"
+const _weekCache=new Map();
+
 function renderWeekly(){
   const pane=document.getElementById('pane-weekly');
   const year=state.activeYear,data=getFilteredData(year);
-  let base=isArchive()?new Date(year,0,1):getToday();
+  const td=_TODAY; // use cached constant
+  let base=isArchive()?new Date(year,0,1):new Date(td);
   base.setDate(base.getDate()-base.getDay()+state.weekOffset*7);
   const days=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);return d;});
-  const fmtR=(a,b)=>a.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+b.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+b.getFullYear();
+  // Build week range header using cached Intl formatter
+  const fmtR=(a,b)=>_weekRangeFmt.format(a)+' – '+_weekRangeFmt.format(b)+', '+b.getFullYear();
   let html=`<div class="week-nav"><button class="week-nav-btn" onclick="weekNav(-1)">← Prev</button><span class="week-range">${fmtR(days[0],days[6])}</span><button class="week-nav-btn" onclick="weekNav(1)">Next →</button></div><div class="week-grid-scroll"><div class="week-grid">`;
   days.forEach(day=>{
-    const _td=getToday();const isToday=day.getFullYear()===_td.getFullYear()&&day.getMonth()===_td.getMonth()&&day.getDate()===_td.getDate(),m=day.getMonth(),d=day.getDate();
+    const isToday=day.getFullYear()===td.getFullYear()&&day.getMonth()===td.getMonth()&&day.getDate()===td.getDate(),m=day.getMonth(),d=day.getDate();
     const de=data.filter(e=>{const bd=parseMMDD(e.Birthday);return bd&&bd.month-1===m&&bd.day===d;});
     const deDebut=data.filter(e=>{if(!e.DebutDate||!e.DebutDate.trim())return false;const p=e.DebutDate.split('/');if(!(p.length>=2&&parseInt(p[0])-1===m&&parseInt(p[1])===d))return false;const bd=parseMMDD(e.Birthday);return!(bd&&(bd.month-1)===m&&bd.day===d);}).map(e=>({...e,_isDebutRow:true,_debutDay:d}));
     const allDe=[...de,...deDebut];
@@ -1014,7 +1097,7 @@ function renderWeekly(){
       const displayName=isEvent?(e.EventName||e.Name):e.Name.split(' ')[0];
       const cleanEw={...e};delete cleanEw._isDebutRow;delete cleanEw._debutDay;
       const wFt=wIsBoth?'both':isDebutRow_w?(bdAlsoMatchesW?'both':'debut'):undefined;
-      html+=`<div class="week-chip ${chipClass}" onclick="openDetail(${JSON.stringify(cleanEw).replace(/"/g,'&quot;')},${wFt?`'${wFt}'`:'undefined'})"><div class="chip-avatar">`;
+      html+=`<div class="week-chip ${chipClass}" onclick="${_oc(cleanEw,wFt)}"><div class="chip-avatar">`;
       html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:(e.Emoji||'⭐');
       html+=`</div><span class="chip-name ${nameClass}">${displayName}</span></div>`;
     });
@@ -1022,7 +1105,7 @@ function renderWeekly(){
   });
   pane.innerHTML=html+`</div></div>`;
 }
-window.weekNav=function(dir){state.weekOffset+=dir;renderWeekly();};
+window.weekNav=function(dir){state.weekOffset+=dir;_renderKeys.weekly=null;renderAll();};
 
 // Hoisted out of openDetail so it isn't redefined on every tap
 function _countdownBoxHTML(date, label, todayMsg, todayLabel, accentColor){
@@ -1046,9 +1129,21 @@ function _countdownBoxHTML(date, label, todayMsg, todayLabel, accentColor){
   return `<div class="detail-countdown" style="border-color:${borderColor};flex:1" data-target-date="${isoDate}"><div class="detail-countdown-label" style="color:${labelColor}">${isPast?'✓ '+label:days===0?todayLabel:'Days Until '+label}</div>${inner}</div>`;
 }
 
-window.openDetail=function(e,forceType){
+// Generates a compact onclick string using entry _id instead of JSON.stringify
+// forceType is optional string: 'both', 'debut', or omitted
+function _oc(e,forceType){
+  const id=e._id;
+  // Fall back to serialization for synthetic debut rows which have no stable _id
+  if(!id){return `openDetail(${JSON.stringify(e).replace(/"/g,'&quot;')},${forceType?`'${forceType}'`:'undefined'})`;}
+  return `openDetail(${id}${forceType?`,'${forceType}'`:''})`;
+}
+
+window.openDetail=function(eOrId,forceType){
   document.getElementById('detail-back').style.display='none';
-  if(typeof e==='string')try{e=JSON.parse(e)}catch{}
+  // Accept numeric id (from _oc helper), object, or JSON string
+  let e=eOrId;
+  if(typeof e==='number'){e=_entryMap.get(e)||{};}
+  else if(typeof e==='string'){try{e=JSON.parse(e)}catch{}}
   // Show overlay immediately so the tap feels instant, then build content
   const overlay=document.getElementById('detail-overlay');
   const panel=document.getElementById('detail-panel');
@@ -1158,49 +1253,70 @@ document.getElementById('detail-back').addEventListener('click',function(){
   document.getElementById('detail-overlay').classList.remove('open');
   document.getElementById('day-overlay').classList.add('open');
 });
-window.openDetailFromDay=function(e,year,month,day,forceType){
+// Pre-built day→entries map, populated during renderMonthly so openDay taps are O(1) lookup
+let _dayMap=new Map(); // key: "month-day", value: [{e, matchesBd, matchesDe}]
+function _buildDayMap(data,year){
+  _dayMap.clear();
+  data.forEach(e=>{
+    const bd=parseMMDD(e.Birthday);
+    if(bd){
+      const key=`${bd.month-1}-${bd.day}`;
+      if(!_dayMap.has(key))_dayMap.set(key,[]);
+      _dayMap.get(key).push({e,matchesBd:true,matchesDe:false});
+    }
+    if(e.DebutDate&&e.DebutDate.trim()){
+      const p=e.DebutDate.split('/');
+      if(p.length>=2){
+        const dm=parseInt(p[0])-1,dd=parseInt(p[1]);
+        // Only add as debut-only if birthday doesn't already land on same day
+        if(!(bd&&(bd.month-1)===dm&&bd.day===dd)){
+          const key=`${dm}-${dd}`;
+          if(!_dayMap.has(key))_dayMap.set(key,[]);
+          _dayMap.get(key).push({e,matchesBd:false,matchesDe:true});
+        } else {
+          // Mark existing birthday entry as also a debut
+          const key=`${dm}-${dd}`;
+          const existing=(_dayMap.get(key)||[]).find(x=>x.e===e);
+          if(existing)existing.matchesDe=true;
+        }
+      }
+    }
+  });
+}
+
+window.openDetailFromDay=function(idOrE,forceType){
   document.getElementById('day-overlay').classList.remove('open');
+  const e=typeof idOrE==='number'?(_entryMap.get(idOrE)||{}):idOrE;
   openDetail(e,forceType);
   document.getElementById('detail-back').style.display='flex';
 };
 document.getElementById('day-close').addEventListener('click',()=>document.getElementById('day-overlay').classList.remove('open'));
 document.getElementById('day-overlay').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 window.openDay=function(year,month,day){
-  const data=getFilteredData(year);
-  const entries=data.filter(e=>{
-    const bd=parseMMDD(e.Birthday);
-    const matchBirthday=bd&&(bd.month-1)===month&&bd.day===day;
-    let matchDebut=false;
-    if(e.DebutDate&&e.DebutDate.trim()){const p=e.DebutDate.split('/');if(p.length>=2)matchDebut=(parseInt(p[0])-1)===month&&parseInt(p[1])===day;}
-    return matchBirthday||matchDebut;
-  });
-  if(!entries.length)return;
-  if(entries.length===1){
-    const e=entries[0];
-    const bd=parseMMDD(e.Birthday);
-    const matchesBirthday=bd&&(bd.month-1)===month&&bd.day===day;
-    const debutP=e.DebutDate&&e.DebutDate.trim()&&e.DebutDate.split('/');
-    const matchesDebut=debutP&&debutP.length>=2&&(parseInt(debutP[0])-1)===month&&parseInt(debutP[1])===day;
-    const ft=matchesBirthday&&matchesDebut?'both':matchesDebut?'debut':undefined;
+  // O(1) lookup from pre-built map instead of filtering all data on every tap
+  const key=`${month}-${day}`;
+  const dayEntries=_dayMap.get(key)||[];
+  if(!dayEntries.length)return;
+  if(dayEntries.length===1){
+    const {e,matchesBd,matchesDe}=dayEntries[0];
+    const ft=matchesBd&&matchesDe?'both':matchesDe?'debut':undefined;
     openDetail(e,ft);
     return;
   }
   const monthName=MONTH_NAMES[month];
-  let h=`<div class="day-modal-header"><div class="day-modal-count">${entries.length}</div><div class="day-modal-title">${monthName} ${day}</div></div>`;
+  let h=`<div class="day-modal-header"><div class="day-modal-count">${dayEntries.length}</div><div class="day-modal-title">${monthName} ${day}</div></div>`;
   h+=`<div class="day-modal-list">`;
-  entries.forEach(e=>{
+  dayEntries.forEach(({e,matchesBd,matchesDe})=>{
     const isEvent=e.Type==='event';
     const name=isEvent?(e.EventName||e.Name):e.Name;
     const sub=e.Generation||e.Branch||'';
     const avatar=e.AvatarURL&&e.AvatarURL.trim()
-      ?`<img src="${e.AvatarURL}" alt="${name}" onerror="this.parentElement.innerHTML='${e.Emoji||'⭐'}'">`
+      ?`<img src="${e.AvatarURL}" loading="lazy" alt="${name}" onerror="this.parentElement.innerHTML='${e.Emoji||'⭐'}'">`
       :(e.Emoji||'⭐');
-    const bd_check=parseMMDD(e.Birthday);
-    const matchesBd=bd_check&&(bd_check.month-1)===month&&bd_check.day===day;
-    const debutP2=e.DebutDate&&e.DebutDate.trim()&&e.DebutDate.split('/');
-    const matchesDe=debutP2&&debutP2.length>=2&&(parseInt(debutP2[0])-1)===month&&parseInt(debutP2[1])===day;
     const typeLabel=isEvent?'event':(matchesBd&&matchesDe?'both':matchesDe?'debut':'birthday');
-    h+=`<div class="day-modal-entry${isEvent?' is-event':''}" onclick="openDetailFromDay(${JSON.stringify(e).replace(/"/g,'&quot;')},${year},${month},${day},'${typeLabel}')">`;
+    const id=e._id;
+    const onclickStr=id?`openDetailFromDay(${id},'${typeLabel}')`:`openDetailFromDay(${JSON.stringify(e).replace(/"/g,'&quot;')},'${typeLabel}')`;
+    h+=`<div class="day-modal-entry${isEvent?' is-event':''}" onclick="${onclickStr}">`;
     h+=`<div class="day-modal-avatar">${avatar}</div>`;
     h+=`<div class="day-modal-info"><div class="day-modal-name">${name}</div><div class="day-modal-sub">${sub}</div></div>`;
     const typeBadgeHTML=typeLabel==='both'?`<span class="day-modal-type birthday">birthday</span> <span class="day-modal-type debut">debut</span>`:`<span class="day-modal-type ${typeLabel}">${typeLabel}</span>`;
@@ -1241,6 +1357,11 @@ document.querySelectorAll('.view-tab').forEach(tab=>{
   });
 });
 
+// Global entry lookup table — keyed by _id assigned at load time
+// Eliminates JSON.stringify/parse in every onclick attribute
+const _entryMap=new Map();
+let _entryIdCounter=0;
+
 async function loadHardcodedData(){
   showToast('Loading data…');
   // Fetch talent sheet and all year sheets in parallel
@@ -1261,6 +1382,10 @@ async function loadHardcodedData(){
   const allYears=new Set(Object.keys(eventsByYear).map(Number));
   if(talentRows.length)Array.from({length:CURRENT_YEAR-START_YEAR+1},(_,i)=>START_YEAR+i).forEach(y=>allYears.add(y));
   if(!allYears.size)allYears.add(CURRENT_YEAR);
+  // Assign stable _id to each entry and register in lookup map
+  _entryMap.clear();
+  talentRows.forEach(e=>{if(!e._id){e._id=++_entryIdCounter;}_entryMap.set(e._id,e);});
+  Object.values(eventsByYear).forEach(rows=>rows.forEach(e=>{if(!e._id){e._id=++_entryIdCounter;}_entryMap.set(e._id,e);}));
   state.allData={};
   allYears.forEach(y=>{state.allData[y]=[...talentRows,...(eventsByYear[y]||[])];});
   const years=Object.keys(state.allData).map(Number).sort((a,b)=>b-a);
@@ -1309,6 +1434,34 @@ function renderAll(){
 function refreshAll(){_renderKeys.monthly=_renderKeys.timeline=_renderKeys.upcoming=_renderKeys.weekly=null;renderYearSwitcher();renderAll();}
 
 loadHardcodedData();
+</script>
+<script>
+// Register Service Worker for stale-while-revalidate CSV caching
+// On repeat visits, data loads instantly from cache while refreshing in background
+if('serviceWorker' in navigator){
+  // Inline the SW as a blob URL so it works without a separate sw.js file
+  const swCode=`
+const CACHE='holoindex-csv-v1';
+const CSV_PATTERN=/docs\\.google\\.com.*output=csv/;
+self.addEventListener('fetch',e=>{
+  if(!CSV_PATTERN.test(e.request.url))return;
+  e.respondWith(
+    caches.open(CACHE).then(cache=>
+      cache.match(e.request).then(cached=>{
+        const fresh=fetch(e.request).then(resp=>{
+          if(resp.ok)cache.put(e.request,resp.clone());
+          return resp;
+        });
+        return cached||fresh; // serve cache instantly, refresh in background
+      })
+    )
+  );
+});
+`;
+  const blob=new Blob([swCode],{type:'application/javascript'});
+  const swUrl=URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
 </script>
 </body>
 </html>
