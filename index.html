@@ -23,7 +23,6 @@
   --bg-card: #12091f;
   --bg-glass: rgba(20,10,40,0.7);
   --pink: #ff6eb4;
-  --pink-light: #ffb3d9;
   --purple: #a855f7;
   --purple-deep: #6d28d9;
   --cyan: #22d3ee;
@@ -248,7 +247,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .tl-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;}
 .tl-gen-badge{display:inline-block;font-size:11px;padding:3px 8px;border-radius:8px;background:rgba(168,85,247,0.2);color:var(--purple);border:1px solid rgba(168,85,247,0.3);letter-spacing:0.5px;}
 .timeline-card.event-card .tl-gen-badge{background:rgba(203,213,225,0.12);color:var(--gold);border-color:rgba(203,213,225,0.3);}
-.tl-debut{font-size:11px;color:var(--text-muted);margin-top:4px}
 
 /* UPCOMING */
 .upcoming-next{background:rgba(20,10,40,0.85);border:1px solid var(--border-bright);border-radius:20px;padding:28px;margin-bottom:24px;box-shadow:var(--shadow-purple);display:flex;align-items:center;gap:28px;flex-wrap:wrap;justify-content:center;}
@@ -553,13 +551,32 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
   requestAnimationFrame(draw);
 })();
 
-function updateClocks(){const now=new Date();document.getElementById('clock-local').textContent=now.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});const jst=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));document.getElementById('clock-jst').textContent=jst.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+// Cache clock and UI element refs — queried every second, must not re-lookup each call
+const _elClockLocal=document.getElementById('clock-local');
+const _elClockJst=document.getElementById('clock-jst');
+const _elStatusBar=document.getElementById('status-bar');
+const _elToast=document.getElementById('toast');
+const _elDetailOverlay=document.getElementById('detail-overlay');
+const _elDetailPanel=document.getElementById('detail-panel');
+const _elDetailImgSide=document.getElementById('detail-fullimg-side');
+const _elDetailContent=document.getElementById('detail-content');
+const _elDetailBack=document.getElementById('detail-back');
+const _elDayOverlay=document.getElementById('day-overlay');
+const _elDayContent=document.getElementById('day-content');
+const _elYearSwitcher=document.getElementById('year-switcher');
+const _elSearchInput=document.getElementById('search-input');
+const _elPanes={monthly:document.getElementById('pane-monthly'),timeline:document.getElementById('pane-timeline'),upcoming:document.getElementById('pane-upcoming'),weekly:document.getElementById('pane-weekly')};
+const _elViewTabs=Array.from(document.querySelectorAll('.view-tab'));
+const _elFilterBtns=Array.from(document.querySelectorAll('.filter-btn[data-branch]'));
+const _elFilterBtnsNonEvent=_elFilterBtns.filter(b=>b.dataset.branch!=='Events');
+const _elEventsBtn=document.querySelector('.filter-btn[data-branch="Events"]');
+function updateClocks(){const now=new Date();_elClockLocal.textContent=now.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});const jst=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));_elClockJst.textContent=jst.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 updateClocks();setInterval(updateClocks,1000);
 
 // Live-tick all sub-week countdown spans (data-cd-date attribute)
 setInterval(function(){
-  // Only tick cd-date spans when monthly or weekly view is active
-  if(state.view==='monthly'||state.view==='weekly'){
+  // Tick cd-date spans on monthly, weekly, and upcoming views
+  if(state.view==='monthly'||state.view==='weekly'||state.view==='upcoming'){
     document.querySelectorAll('[data-cd-date]').forEach(function(el){
       const target=new Date(el.dataset.cdDate);
       const sc=secsUntil(target);
@@ -571,12 +588,10 @@ setInterval(function(){
   if(state.view==='monthly'){
     const nubBanner=document.getElementById('next-up-banner');
     if(nubBanner&&nubBanner.dataset.targetDate){
-      const nubTarget=new Date(nubBanner.dataset.targetDate);
-      const nubSc=secsUntil(nubTarget);
+      const nubSc=secsUntil(new Date(nubBanner.dataset.targetDate));
       if(nubSc<=0){nubBanner.removeAttribute('data-target-date');}
       else{
-        const nubSs=Math.max(0,Math.floor(nubSc));
-        const nubDv=Math.floor(nubSs/86400),nubHv=Math.floor((nubSs%86400)/3600),nubMv=Math.floor((nubSs%3600)/60),nubSv=nubSs%60;
+        const {d:nubDv,h:nubHv,m:nubMv,s:nubSv}=_splitSecs(nubSc);
         nubBanner.querySelectorAll('[data-nub-unit]').forEach(function(span){
           switch(span.dataset.nubUnit){case 'd':span.textContent=nubDv;break;case 'h':span.textContent=nubHv;break;case 'm':span.textContent=nubMv;break;case 's':span.textContent=nubSv;break;}
         });
@@ -587,12 +602,10 @@ setInterval(function(){
   if(state.view==='upcoming'){
     const heroCountdown=document.getElementById('upcoming-hero-countdown');
     if(heroCountdown&&heroCountdown.dataset.targetDate){
-      const target=new Date(heroCountdown.dataset.targetDate);
-      const sc=secsUntil(target);
+      const sc=secsUntil(new Date(heroCountdown.dataset.targetDate));
       if(sc<=0){_renderKeys.upcoming=null;renderAll();}
       else{
-        const ss=Math.floor(sc);
-        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+        const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(sc);
         heroCountdown.querySelectorAll('.countdown-unit[data-unit]').forEach(function(unit){
           const span=unit.querySelector('.countdown-num');const lbl=unit.querySelector('.countdown-lbl');if(!span)return;
           switch(unit.dataset.unit){case 'd':span.textContent=dv;if(lbl)lbl.textContent='Day'+(dv!==1?'s':'');break;case 'h':span.textContent=hv;break;case 'm':span.textContent=mv;break;case 's':span.textContent=sv;break;}
@@ -601,14 +614,11 @@ setInterval(function(){
     }
   }
   // Live-tick detail panel countdown boxes
-  const detailOverlay=document.getElementById('detail-overlay');
-  if(detailOverlay.classList.contains('open')){
-    detailOverlay.querySelectorAll('.detail-countdown[data-target-date]').forEach(function(box){
-      const target=new Date(box.dataset.targetDate);
-      const sc=secsUntil(target);
+  if(_elDetailOverlay.classList.contains('open')){
+    _elDetailOverlay.querySelectorAll('.detail-countdown[data-target-date]').forEach(function(box){
+      const sc=secsUntil(new Date(box.dataset.targetDate));
       if(sc<=0)return;
-      const ss=Math.floor(sc);
-      const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+      const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(sc);
       box.querySelectorAll('.countdown-unit[data-unit]').forEach(function(unit){
         const span=unit.querySelector('.countdown-num');
         const lbl=unit.querySelector('.countdown-lbl');
@@ -684,6 +694,29 @@ function shortCountdownStr(totalSecs){
 function nextOccurrence(entry,year){const bd=parseMMDD(entry.Birthday);if(!bd)return null;const now=getToday();let d=new Date(year,bd.month-1,bd.day);d.setHours(0,0,0,0);if(entry.Type==='event')return d<now?null:d;if(d<now)d=new Date(year+1,bd.month-1,bd.day);return d;}
 const CURRENT_YEAR=_TODAY.getFullYear();
 const START_YEAR=2023;
+const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+// Shared Intl formatters — instantiated once, never per-render
+const _fmtLong=new Intl.DateTimeFormat('en-US',{month:'long',day:'numeric',year:'numeric'});
+const _fmtShort=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
+// Gradient style for "both" (birthday+debut) inline text — reused across renders
+const _GRAD_BOTH='background:linear-gradient(90deg,#ff6eb4,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block';
+// Decompose total seconds into {d,h,m,s}
+function _splitSecs(sc){const ss=Math.max(0,Math.floor(sc));return{d:Math.floor(ss/86400),h:Math.floor((ss%86400)/3600),m:Math.floor((ss%3600)/60),s:ss%60};}
+// Shared avatar HTML builder
+function _avHtml(e,size){const sz=size||'width:100%;height:100%;object-fit:cover;';return e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name||''}" style="${sz}" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;}
+// Shared debut-upcoming builder — used by renderMonthly (Next Up) and renderUpcoming
+function _buildUpcomingWithDebuts(data,year){
+  const debutList=[];
+  data.filter(e=>!e._isDebutRow&&e.DebutDate&&e.DebutDate.trim()).forEach(e=>{
+    const p=e.DebutDate.split('/');if(p.length<2)return;
+    const bd=parseMMDD(e.Birthday);
+    const dm=parseInt(p[0]),dd=parseInt(p[1]);
+    if(bd&&(bd.month-1)===dm-1&&bd.day===dd)return; // same day as birthday, already included
+    let next=new Date(year,dm-1,dd);if(next<getToday())next=new Date(year+1,dm-1,dd);
+    debutList.push({...e,_isDebutRow:true,_debutDay:dd,nextDate:next,daysAway:daysUntil(next)});
+  });
+  return [...data.map(e=>{const next=nextOccurrence(e,year);if(!next)return null;return{...e,nextDate:next,daysAway:daysUntil(next)};}).filter(Boolean),...debutList].sort((a,b)=>a.daysAway-b.daysAway);
+}
 let state={allData:{},activeYear:CURRENT_YEAR,view:'monthly',branch:'All',eventsOnly:false,search:'',weekOffset:0};
 
 const HARDCODED_SOURCES={
@@ -717,22 +750,6 @@ function getFilteredData(year){
 }
 function isArchive(){return state.activeYear!==CURRENT_YEAR;}
 
-// Builds synthetic debut entries for a given month from talent DebutDate fields
-function getDebutEntries(data, month){
-  const entries=[];
-  data.forEach(e=>{
-    if(!e.DebutDate||!e.DebutDate.trim())return;
-    const p=e.DebutDate.split('/');
-    if(p.length<2)return;
-    const dm=parseInt(p[0])-1, dd=parseInt(p[1]);
-    if(dm!==month)return;
-    // Skip if birthday already falls on the same day — that row already exists in monthEntries
-    const bd=parseMMDD(e.Birthday);
-    if(bd&&(bd.month-1)===month&&bd.day===dd)return;
-    entries.push({...e, _isDebutRow:true, _debutDay:dd});
-  });
-  return entries;
-}
 
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAY_LABELS=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -780,25 +797,22 @@ function entryRowHTML(e,year,showCountdown=true,compact=false){
       else cdHTML=`<span class="bday-countdown past">&#10003; done</span>`;
     }
   }
-  let avInner=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
   const rowClass=isBoth?'is-both':isDebutRow?'is-debut':(isEvent?'is-event':'');
   const badgeClass=isBoth?'pink-cyan':isDebutRow?'cyan':(isEvent?'gold':'');
   const nameClass=isBoth?'both-name':isDebutRow?'debut-name':(isEvent?'event-name':'');
   const displayName=isEvent?(e.EventName||e.Name):e.Name;
-  const subLabel='';
   const cleanE={...e};delete cleanE._isDebutRow;delete cleanE._debutDay;
-  const rowFt=isBoth?"'both'":'undefined';
   return `<div class="bday-row-item ${rowClass}" onclick="${_oc(cleanE,isBoth?'both':undefined)}">
     <div class="bday-day-badge ${badgeClass}">${bd?bd.day:'?'}</div>
-    <div class="bday-avatar">${avInner}</div>
+    <div class="bday-avatar">${_avHtml(e)}</div>
     <span class="bday-name ${nameClass}" data-name="${displayName}">${displayName}</span>
-    ${subLabel}${compact?'':` <span class="bday-gen">${e.Generation||e.Branch||''}</span>`}
+    ${compact?'':` <span class="bday-gen">${e.Generation||e.Branch||''}</span>`}
     ${cdHTML}
   </div>`;
 }
 
 function renderMonthly(){
-  const pane=document.getElementById('pane-monthly');
+  const pane=_elPanes.monthly;
   const year=state.activeYear;
   const data=getFilteredData(year);
   let html='';
@@ -836,14 +850,7 @@ function renderMonthly(){
   if(!isArchive()){
     // ── Next Up Banner ──
     (function(){
-      const debutUp=[];
-      data.filter(e=>!e._isDebutRow&&e.DebutDate&&e.DebutDate.trim()).filter(e=>{const p=e.DebutDate.split('/');if(p.length<2)return true;const bd=parseMMDD(e.Birthday);return!(bd&&(bd.month-1)===parseInt(p[0])-1&&bd.day===parseInt(p[1]));}).forEach(e=>{
-        const p=e.DebutDate.split('/');if(p.length<2)return;
-        const dm=parseInt(p[0]),dd=parseInt(p[1]);
-        let next=new Date(year,dm-1,dd);if(next<getToday())next=new Date(year+1,dm-1,dd);
-        debutUp.push({...e,_isDebutRow:true,_debutDay:dd,nextDate:next,daysAway:daysUntil(next)});
-      });
-      const withDays=[...data.map(e=>{const next=nextOccurrence(e,year);if(!next)return null;return{...e,nextDate:next,daysAway:daysUntil(next)};}).filter(Boolean),...debutUp].sort((a,b)=>a.daysAway-b.daysAway);
+      const withDays=_buildUpcomingWithDebuts(data,year);
       if(!withDays.length)return;
       const nx=withDays[0],nd=nx.daysAway,isEv=nx.Type==='event';
       const cleanNx={...nx};delete cleanNx._isDebutRow;delete cleanNx._debutDay;delete cleanNx.nextDate;delete cleanNx.daysAway;
@@ -851,21 +858,17 @@ function renderMonthly(){
       if(nd===0){
         cdHtml=`<span class="nub-today">🎉 Today!</span>`;
       } else {
-        const sc=secsUntil(nx.nextDate);const ss=Math.max(0,Math.floor(sc));
-        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+        const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(secsUntil(nx.nextDate));
         const unitCls=isEv?'gold-unit':'';const numCls=isEv?'gold-num':'';
         if(dv>0)cdHtml+=`<div class="nub-countdown-unit ${unitCls}"><span class="nub-num ${numCls}" data-nub-unit="d">${dv}</span><span class="nub-lbl">Day${dv!==1?'s':''}</span></div>`;
         cdHtml+=`<div class="nub-countdown-unit ${unitCls}"><span class="nub-num ${numCls}" data-nub-unit="h">${hv}</span><span class="nub-lbl">Hrs</span></div>`;
         cdHtml+=`<div class="nub-countdown-unit ${unitCls}"><span class="nub-num ${numCls}" data-nub-unit="m">${mv}</span><span class="nub-lbl">Min</span></div>`;
         cdHtml+=`<div class="nub-countdown-unit ${unitCls}"><span class="nub-num ${numCls}" data-nub-unit="s">${sv}</span><span class="nub-lbl">Sec</span></div>`;
       }
-      const avHtml=nx.AvatarURL&&nx.AvatarURL.trim()?`<img src="${nx.AvatarURL}" loading="lazy" alt="${nx.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:26px">${nx.Emoji||'⭐'}</span>`;
       const displayNm=isEv?(nx.EventName||nx.Name):nx.Name;
-      // Use Intl instead of toLocaleDateString
-      const nubFmt=new Intl.DateTimeFormat('en-US',{month:'long',day:'numeric',year:'numeric'});
-      const dateStr=nd===0?'Today!':nubFmt.format(nx.nextDate);
+      const dateStr=nd===0?'Today!':_fmtLong.format(nx.nextDate);
       html+=`<div class="next-up-banner${isEv?' is-event-banner':''}" id="next-up-banner" data-target-date="${nx.nextDate.toISOString()}" onclick="${_oc(cleanNx)}">
-        <div><div class="nub-label">${nd===0?'Today':'Next Up'}</div><div class="nub-avatar">${avHtml}</div></div>
+        <div><div class="nub-label">${nd===0?'Today':'Next Up'}</div><div class="nub-avatar">${_avHtml(nx)}</div></div>
         <div class="nub-info"><div class="nub-name">${displayNm}</div><div class="nub-date">${dateStr}</div></div>
         <div class="nub-countdown" id="nub-countdown-units">${cdHtml}</div>
         <span class="nub-arrow">›</span>
@@ -939,7 +942,7 @@ function renderMonthly(){
 }
 
 function renderTimeline(){
-  const pane=document.getElementById('pane-timeline');
+  const pane=_elPanes.timeline;
   const year=state.activeYear;
   const data=getFilteredData(year);
   let hasAny=false;
@@ -987,9 +990,8 @@ function renderTimeline(){
       const bdAlsoMatchesTl=tlBd&&tlBd.month-1===m&&tlBd.day===e._debutDay;
       const ft=tlIsBoth?'both':isDebutRow?(bdAlsoMatchesTl?'both':'debut'):undefined;
       html+=`<div class="timeline-card ${cardClass}" onclick="${_oc(cleanE,ft)}">`;
-      html+=`<div class="tl-date-circle">${bd.day}</div><div class="tl-avatar">`;
-      html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
-      html+=`</div><div class="tl-name ${tlIsBoth?'both-name':''}">${isEvent?(e.EventName||e.Name):e.Name}</div>`;
+      html+=`<div class="tl-date-circle">${bd.day}</div><div class="tl-avatar">${_avHtml(e)}</div>`;
+      html+=`<div class="tl-name ${tlIsBoth?'both-name':''}">${isEvent?(e.EventName||e.Name):e.Name}</div>`;
       html+=`<div class="tl-gen-badge">${tlIsBoth?'Birthday & Debut':isDebutRow?'Debut':isEvent?'Event':(e.Generation||e.Branch)}</div>`;
       html+=`</div>`;
     });
@@ -1000,7 +1002,7 @@ function renderTimeline(){
 }
 
 function renderUpcoming(){
-  const pane=document.getElementById('pane-upcoming');
+  const pane=_elPanes.upcoming;
   const year=state.activeYear;
   const data=getFilteredData(year);
   if(isArchive()){
@@ -1008,38 +1010,29 @@ function renderUpcoming(){
     let html=`<div style="text-align:center;margin-bottom:16px"><span class="archive-label">📁 Archive: ${year}</span></div><div class="upcoming-list">`;
     sorted.forEach(e=>{
       const bd=parseMMDD(e.Birthday),isEvent=e.Type==='event';
-      html+=`<div class="upcoming-item ${isEvent?'event-item':''}" onclick="${_oc(e)}"><div class="up-avatar">`;
-      html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
-      html+=`</div><div class="up-info"><div class="up-name">${isEvent?(e.EventName||e.Name):e.Name}</div><div class="up-sub">${e.Generation||e.Branch}${bd?` • ${MONTH_NAMES[bd.month-1]} ${bd.day}`:''}</div></div><span class="up-time muted">${bd?`${bd.month}/${bd.day}`:''}</span></div>`;
+      html+=`<div class="upcoming-item ${isEvent?'event-item':''}" onclick="${_oc(e)}"><div class="up-avatar">${_avHtml(e)}</div><div class="up-info"><div class="up-name">${isEvent?(e.EventName||e.Name):e.Name}</div><div class="up-sub">${e.Generation||e.Branch}${bd?` • ${MONTH_NAMES[bd.month-1]} ${bd.day}`:''}</div></div><span class="up-time muted">${bd?`${bd.month}/${bd.day}`:''}</span></div>`;
     });
     pane.innerHTML=html+'</div>';return;
   }
-  // Build debut entries with their own nextOccurrence
-  const debutUpcoming=[];
-  data.filter(e=>!e._isDebutRow&&e.DebutDate&&e.DebutDate.trim()).filter(e=>{const p=e.DebutDate.split('/');if(p.length<2)return true;const bd=parseMMDD(e.Birthday);return!(bd&&(bd.month-1)===parseInt(p[0])-1&&bd.day===parseInt(p[1]));}).forEach(e=>{
-    const p=e.DebutDate.split('/');if(p.length<2)return;
-    const dm=parseInt(p[0]),dd=parseInt(p[1]);
-    let next=new Date(year,dm-1,dd);if(next<getToday())next=new Date(year+1,dm-1,dd);
-    debutUpcoming.push({...e,_isDebutRow:true,_debutDay:dd,nextDate:next,daysAway:daysUntil(next)});
-  });
-  const withDays=[...data.map(e=>{const next=nextOccurrence(e,year);if(!next)return null;return{...e,nextDate:next,daysAway:daysUntil(next)};}).filter(Boolean),...debutUpcoming].sort((a,b)=>a.daysAway-b.daysAway);
+  const withDays=_buildUpcomingWithDebuts(data,year);
   if(!withDays.length){pane.innerHTML='<div class="empty-state"><span class="emoji">🔍</span>No entries found</div>';return;}
   const next=withDays[0],isNextEvent=next.Type==='event',nd=next.daysAway;
-  // Pre-build date formatters once — toLocaleDateString() is very slow on mobile when called per-row
-  const longFmt=new Intl.DateTimeFormat('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const shortFmt=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
-  let h=`<div class="upcoming-next"><div><div class="upcoming-avatar">`;
-  h+=next.AvatarURL&&next.AvatarURL.trim()?`<img src="${next.AvatarURL}" loading="lazy" alt="${next.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:52px">${next.Emoji||'⭐'}</span>`;
-  h+=`</div></div><div class="upcoming-info"><div class="upcoming-label">${nd===0?'Today!':'Next Up'}</div>`;
+  let h=`<div class="upcoming-next"><div><div class="upcoming-avatar">${_avHtml(next)}</div></div><div class="upcoming-info"><div class="upcoming-label">${nd===0?'Today!':'Next Up'}</div>`;
   h+=`<div class="upcoming-name">${isNextEvent?(next.EventName||next.Name):next.Name}</div>`;
-  h+=`<div class="upcoming-date">${longFmt.format(next.nextDate)}</div>`;
+  h+=`<div class="upcoming-date">${_fmtLong.format(next.nextDate)}</div>`;
   if(nd===0){h+=`<div class="today-badge">🎉 Today!</div>`;}
-  else{const sc=secsUntil(next.nextDate);const ss=Math.max(0,Math.floor(sc));const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;h+=`<div class="upcoming-countdown" id="upcoming-hero-countdown" data-target-date="${next.nextDate.toISOString()}">`;if(dv>0)h+=`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`;h+=`<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div>`;h+=`<div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div>`;h+=`<div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div>`;h+=`</div>`;}
-  h+=`</div></div>`;
-  h+=`<div class="upcoming-list">`;
+  else{
+    const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(secsUntil(next.nextDate));
+    h+=`<div class="upcoming-countdown" id="upcoming-hero-countdown" data-target-date="${next.nextDate.toISOString()}">`;
+    if(dv>0)h+=`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`;
+    h+=`<div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div>`;
+    h+=`<div class="countdown-unit" data-unit="m"><span class="countdown-num">${mv}</span><span class="countdown-lbl">Min</span></div>`;
+    h+=`<div class="countdown-unit" data-unit="s"><span class="countdown-num">${sv}</span><span class="countdown-lbl">Sec</span></div>`;
+    h+=`</div>`;
+  }
+  h+=`</div></div><div class="upcoming-list">`;
   withDays.forEach(e=>{
     const isEvent=e.Type==='event',d=e.daysAway;
-    // Only call secsUntil for ≤7d entries; use simple string for everything else
     const timeStr=d===0?'Today!':d===1?'Tomorrow':d<=7?shortCountdownStr(secsUntil(e.nextDate)):`${d}d`;
     const isDebutRow_up=e._isDebutRow===true;
     const bdUp=parseMMDD(e.Birthday);
@@ -1048,41 +1041,35 @@ function renderUpcoming(){
     const upIsBoth=!isDebutRow_up&&!isEvent&&e.DebutDate&&e.DebutDate.trim()&&bdUp&&(()=>{const p=e.DebutDate.split('/');if(p.length<2)return false;const dm=parseInt(p[0])-1,dd=parseInt(p[1]);return upNextDate&&dm===upNextDate.getMonth()&&dd===upNextDate.getDate();})();
     const itemClass=upIsBoth?'both-item':isDebutRow_up?'debut-item':isEvent?'event-item':'';
     const upName=isEvent?(e.EventName||e.Name):e.Name;
-    // Use cached Intl formatter — avoids one toLocaleDateString() call per row
-    const upSub=(upIsBoth?'Birthday & Debut':isDebutRow_up?'Debut':(e.Generation||e.Branch))+' • '+shortFmt.format(e.nextDate);
+    const upSub=(upIsBoth?'Birthday & Debut':isDebutRow_up?'Debut':(e.Generation||e.Branch))+' • '+_fmtShort.format(e.nextDate);
     const upTc=d===0?'teal':isDebutRow_up?'cyan':isEvent?'gold':'';
     const cleanEup={...e};delete cleanEup._isDebutRow;delete cleanEup._debutDay;delete cleanEup.nextDate;delete cleanEup.daysAway;
     const upFt=upIsBoth?'both':isDebutRow_up?(bdAlsoMatchesUp?'both':'debut'):undefined;
-    h+=`<div class="upcoming-item ${itemClass}" onclick="${_oc(cleanEup,upFt)}"><div class="up-avatar">`;
-    h+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:`<div class="grad-circle">${e.Emoji||'⭐'}</div>`;
-    var upNameInner=upIsBoth?'<span style="background:linear-gradient(90deg,#ff6eb4,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block">'+upName+'</span>':upName;
-    var upTimeEl=upIsBoth?'<span class="up-time" style="background:linear-gradient(90deg,#ff6eb4,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block">'+timeStr+'</span>':'<span class="up-time '+upTc+'">'+timeStr+'</span>';
-    h+='</div><div class="up-info"><div class="up-name">'+upNameInner+'</div><div class="up-sub">'+upSub+'</div></div>'+upTimeEl+'</div>';
+    const upNameInner=upIsBoth?`<span style="${_GRAD_BOTH}">${upName}</span>`:upName;
+    const cdAttr=d>0&&d<=7?` data-cd-date="${e.nextDate.toISOString()}"`:''
+    const upTimeEl=upIsBoth?`<span class="up-time"${cdAttr} style="${_GRAD_BOTH}">${timeStr}</span>`:`<span class="up-time ${upTc}"${cdAttr}>${timeStr}</span>`;
+    h+=`<div class="upcoming-item ${itemClass}" onclick="${_oc(cleanEup,upFt)}"><div class="up-avatar">${_avHtml(e)}</div><div class="up-info"><div class="up-name">${upNameInner}</div><div class="up-sub">${upSub}</div></div>${upTimeEl}</div>`;
   });
   pane.innerHTML=h+`</div>`;
 }
 
-// Shared Intl formatter for weekly range header — instantiated once, reused
-const _weekRangeFmt=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'});
-// Week render cache keyed by "year|offset|filterKey"
-const _weekCache=new Map();
 
 function renderWeekly(){
-  const pane=document.getElementById('pane-weekly');
+  const pane=_elPanes.weekly;
   const year=state.activeYear,data=getFilteredData(year);
   const td=_TODAY; // use cached constant
   let base=isArchive()?new Date(year,0,1):new Date(td);
   base.setDate(base.getDate()-base.getDay()+state.weekOffset*7);
   const days=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);return d;});
   // Build week range header using cached Intl formatter
-  const fmtR=(a,b)=>_weekRangeFmt.format(a)+' – '+_weekRangeFmt.format(b)+', '+b.getFullYear();
+  const fmtR=(a,b)=>_fmtShort.format(a)+' – '+_fmtShort.format(b)+', '+b.getFullYear();
   let html=`<div class="week-nav"><button class="week-nav-btn" onclick="weekNav(-1)">← Prev</button><span class="week-range">${fmtR(days[0],days[6])}</span><button class="week-nav-btn" onclick="weekNav(1)">Next →</button></div><div class="week-grid-scroll"><div class="week-grid">`;
   days.forEach(day=>{
     const isToday=day.getFullYear()===td.getFullYear()&&day.getMonth()===td.getMonth()&&day.getDate()===td.getDate(),m=day.getMonth(),d=day.getDate();
     const de=data.filter(e=>{const bd=parseMMDD(e.Birthday);return bd&&bd.month-1===m&&bd.day===d;});
     const deDebut=data.filter(e=>{if(!e.DebutDate||!e.DebutDate.trim())return false;const p=e.DebutDate.split('/');if(!(p.length>=2&&parseInt(p[0])-1===m&&parseInt(p[1])===d))return false;const bd=parseMMDD(e.Birthday);return!(bd&&(bd.month-1)===m&&bd.day===d);}).map(e=>({...e,_isDebutRow:true,_debutDay:d}));
     const allDe=[...de,...deDebut];
-    html+=`<div class="week-day-col ${isToday?'today-col':''}"><div class="week-day-header"><span class="week-day-name">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day.getDay()]}</span><span class="week-day-num">${d}</span></div>`;
+    html+=`<div class="week-day-col ${isToday?'today-col':''}"><div class="week-day-header"><span class="week-day-name">${DAY_NAMES[day.getDay()]}</span><span class="week-day-num">${d}</span></div>`;
     allDe.forEach(e=>{
       const isDebutRow_w=e._isDebutRow===true;
       const isEvent=e.Type==='event';
@@ -1094,9 +1081,7 @@ function renderWeekly(){
       const displayName=isEvent?(e.EventName||e.Name):e.Name.split(' ')[0];
       const cleanEw={...e};delete cleanEw._isDebutRow;delete cleanEw._debutDay;
       const wFt=wIsBoth?'both':isDebutRow_w?(bdAlsoMatchesW?'both':'debut'):undefined;
-      html+=`<div class="week-chip ${chipClass}" onclick="${_oc(cleanEw,wFt)}"><div class="chip-avatar">`;
-      html+=e.AvatarURL&&e.AvatarURL.trim()?`<img src="${e.AvatarURL}" loading="lazy" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;">`:(e.Emoji||'⭐');
-      html+=`</div><span class="chip-name ${nameClass}">${displayName}</span></div>`;
+      html+=`<div class="week-chip ${chipClass}" onclick="${_oc(cleanEw,wFt)}"><div class="chip-avatar">${_avHtml(e)}</div><span class="chip-name ${nameClass}">${displayName}</span></div>`;
     });
     html+=`</div>`;
   });
@@ -1114,8 +1099,7 @@ function _countdownBoxHTML(date, label, todayMsg, todayLabel, accentColor){
   if(isPast) inner=`<div style="font-size:22px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
   else if(days===0) inner=`<div class="today-badge">${todayMsg}</div>`;
   else {
-    const sc=secsUntil(date);const ss=Math.max(0,Math.floor(sc));
-    const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+    const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(secsUntil(date));
     inner=`<div class="detail-countdown-nums">
       ${dv>0?`<div class="countdown-unit" data-unit="d"><span class="countdown-num">${dv}</span><span class="countdown-lbl">Day${dv!==1?'s':''}</span></div>`:''}
       <div class="countdown-unit" data-unit="h"><span class="countdown-num">${hv}</span><span class="countdown-lbl">Hrs</span></div>
@@ -1136,16 +1120,16 @@ function _oc(e,forceType){
 }
 
 window.openDetail=function(eOrId,forceType){
-  document.getElementById('detail-back').style.display='none';
+  _elDetailBack.style.display='none';
   // Accept numeric id (from _oc helper), object, or JSON string
   let e=eOrId;
   if(typeof e==='number'){e=_entryMap.get(e)||{};}
   else if(typeof e==='string'){try{e=JSON.parse(e)}catch{}}
   // Show overlay immediately so the tap feels instant, then build content
-  const overlay=document.getElementById('detail-overlay');
-  const panel=document.getElementById('detail-panel');
-  const imgSide=document.getElementById('detail-fullimg-side');
-  const content=document.getElementById('detail-content');
+  const overlay=_elDetailOverlay;
+  const panel=_elDetailPanel;
+  const imgSide=_elDetailImgSide;
+  const content=_elDetailContent;
 
   // Handle full image side — hide first so panel shows at correct size instantly
   if(!e.Type||e.Type!=='event'&&e.ImageURL&&e.ImageURL.trim()){
@@ -1164,9 +1148,9 @@ window.openDetail=function(eOrId,forceType){
       } else {
         h+=`<div class="detail-avatar event-avatar" style="display:flex;align-items:center;justify-content:center;font-size:42px;background:linear-gradient(135deg,rgba(30,41,59,0.4),rgba(148,163,184,0.2));border:2px solid var(--gold);">${e.Emoji||'⭐'}</div>`;
       }
+    } else {
+      h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">${_avHtml(e,'width:100%;height:100%;object-fit:cover;border-radius:50%;')}</div>`;
     }
-    else if(!(e.AvatarURL&&e.AvatarURL.trim())){h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><div class="grad-circle">${e.Emoji||'⭐'}</div></div>`;}
-    else{h+=`<div class="detail-avatar" style="display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><img src="${e.AvatarURL}" alt="${e.Name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML='<div class=\\'grad-circle\\'>${e.Emoji||'⭐'}</div>'"></div>`;}
     let badgesHTML='';
     if(isEvent){
       badgesHTML=`<span class="detail-type-badge event">Event</span>`;
@@ -1194,8 +1178,7 @@ window.openDetail=function(eOrId,forceType){
       if(isEvent){
         const eventDate=new Date(year,bd.month-1,bd.day);
         const isPastEvent=daysUntil(eventDate)<0;
-        const sc=secsUntil(eventDate);const ss=Math.max(0,Math.floor(sc));
-        const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+        const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(secsUntil(eventDate));
         h+=`<div class="detail-countdown" ${isPastEvent?'style="border-color:rgba(90,63,122,0.2)"':''} data-target-date="${eventDate.toISOString()}">`;
         h+=`<div class="detail-countdown-label">${isPastEvent?'Event Completed':daysUntil(eventDate)===0?'🎉 TODAY!':'Days Until Event'}</div>`;
         if(isPastEvent) h+=`<div style="font-size:28px;font-weight:700;color:var(--text-muted);letter-spacing:2px;">✓ Done</div>`;
@@ -1215,8 +1198,7 @@ window.openDetail=function(eOrId,forceType){
           h+=_countdownBoxHTML(debutNext,'Anniversary','Happy Anniversary! 🎊','🎊 TODAY!','cyan');
           h+=`</div>`;
         } else {
-          const sc=secsUntil(bdNext);const ss=Math.max(0,Math.floor(sc));
-          const dv=Math.floor(ss/86400),hv=Math.floor((ss%86400)/3600),mv=Math.floor((ss%3600)/60),sv=ss%60;
+          const {d:dv,h:hv,m:mv,s:sv}=_splitSecs(secsUntil(bdNext));
           const days=daysUntil(bdNext);
           h+=`<div class="detail-countdown" data-target-date="${bdNext.toISOString()}"><div class="detail-countdown-label">${days===0?'🎉 TODAY!':'Days Until Birthday'}</div>`;
           if(days===0) h+=`<div class="today-badge">Happy Birthday! 🎉</div>`;
@@ -1244,11 +1226,11 @@ window.openDetail=function(eOrId,forceType){
     }
   });
 };
-document.getElementById('detail-close').addEventListener('click',()=>{document.getElementById('detail-overlay').classList.remove('open');document.getElementById('detail-panel').classList.remove('has-fullimg');});
-document.getElementById('detail-overlay').addEventListener('click',function(e){if(e.target===this){this.classList.remove('open');document.getElementById('detail-panel').classList.remove('has-fullimg');}});
-document.getElementById('detail-back').addEventListener('click',function(){
-  document.getElementById('detail-overlay').classList.remove('open');
-  document.getElementById('day-overlay').classList.add('open');
+document.getElementById('detail-close').addEventListener('click',()=>{_elDetailOverlay.classList.remove('open');_elDetailPanel.classList.remove('has-fullimg');});
+_elDetailOverlay.addEventListener('click',function(e){if(e.target===this){this.classList.remove('open');_elDetailPanel.classList.remove('has-fullimg');}});
+_elDetailBack.addEventListener('click',function(){
+  _elDetailOverlay.classList.remove('open');
+  _elDayOverlay.classList.add('open');
 });
 // Pre-built day→entries map, populated during renderMonthly so openDay taps are O(1) lookup
 let _dayMap=new Map(); // key: "month-day", value: [{e, matchesBd, matchesDe}]
@@ -1282,13 +1264,13 @@ function _buildDayMap(data,year){
 }
 
 window.openDetailFromDay=function(idOrE,forceType){
-  document.getElementById('day-overlay').classList.remove('open');
+  _elDayOverlay.classList.remove('open');
   const e=typeof idOrE==='number'?(_entryMap.get(idOrE)||{}):idOrE;
   openDetail(e,forceType);
-  document.getElementById('detail-back').style.display='flex';
+  _elDetailBack.style.display='flex';
 };
-document.getElementById('day-close').addEventListener('click',()=>document.getElementById('day-overlay').classList.remove('open'));
-document.getElementById('day-overlay').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('day-close').addEventListener('click',()=>_elDayOverlay.classList.remove('open'));
+_elDayOverlay.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 window.openDay=function(year,month,day){
   // O(1) lookup from pre-built map instead of filtering all data on every tap
   const key=`${month}-${day}`;
@@ -1321,35 +1303,42 @@ window.openDay=function(year,month,day){
     h+=`<div class="day-modal-arrow">›</div></div>`;
   });
   h+=`</div>`;
-  document.getElementById('day-content').innerHTML=h;
-  document.getElementById('day-overlay').classList.add('open');
+  _elDayContent.innerHTML=h;
+  _elDayOverlay.classList.add('open');
 };
 
 function renderYearSwitcher(){
   const years=Object.keys(state.allData).map(Number).sort((a,b)=>b-a);
-  const sw=document.getElementById('year-switcher');
-  sw.innerHTML=years.map(y=>`<button class="year-btn ${y===state.activeYear?'active':''}" onclick="switchYear(${y})">${y}${y===CURRENT_YEAR?'<span class="now-badge">NOW</span>':''}</button>`).join('');
+  _elYearSwitcher.innerHTML=years.map(y=>`<button class="year-btn ${y===state.activeYear?'active':''}" onclick="switchYear(${y})">${y}${y===CURRENT_YEAR?'<span class="now-badge">NOW</span>':''}</button>`).join('');
 }
 window.switchYear=function(y){state.activeYear=y;state.weekOffset=0;renderYearSwitcher();renderAll();};
 
-document.querySelectorAll('.filter-btn[data-branch]').forEach(btn=>{
+_elFilterBtns.forEach(btn=>{
   btn.addEventListener('click',function(){
     const branch=this.dataset.branch;
-    if(branch==='Events'){state.eventsOnly=!state.eventsOnly;this.classList.toggle('active',state.eventsOnly);if(state.eventsOnly){document.querySelectorAll('.filter-btn[data-branch]:not([data-branch="Events"])').forEach(b=>b.classList.remove('active'));state.branch='All';}}
-    else{state.eventsOnly=false;document.querySelector('.filter-btn[data-branch="Events"]').classList.remove('active');state.branch=(branch!=='All'&&state.branch===branch)?'All':branch;document.querySelectorAll('.filter-btn[data-branch]:not([data-branch="Events"])').forEach(b=>b.classList.toggle('active',b.dataset.branch===state.branch));}
+    if(branch==='Events'){
+      state.eventsOnly=!state.eventsOnly;
+      this.classList.toggle('active',state.eventsOnly);
+      if(state.eventsOnly){_elFilterBtnsNonEvent.forEach(b=>b.classList.remove('active'));state.branch='All';}
+    } else {
+      state.eventsOnly=false;
+      _elEventsBtn.classList.remove('active');
+      state.branch=(branch!=='All'&&state.branch===branch)?'All':branch;
+      _elFilterBtnsNonEvent.forEach(b=>b.classList.toggle('active',b.dataset.branch===state.branch));
+    }
     renderAll();
   });
 });
 let _searchDebounce;
-document.getElementById('search-input').addEventListener('input',function(){clearTimeout(_searchDebounce);const val=this.value;_searchDebounce=setTimeout(()=>{state.search=val;renderAll();},220);});
+_elSearchInput.addEventListener('input',function(){clearTimeout(_searchDebounce);const val=this.value;_searchDebounce=setTimeout(()=>{state.search=val;renderAll();},220);});
 
-document.querySelectorAll('.view-tab').forEach(tab=>{
+_elViewTabs.forEach(tab=>{
   tab.addEventListener('click',function(){
     state.view=this.dataset.view;
-    document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+    _elViewTabs.forEach(t=>t.classList.remove('active'));
     this.classList.add('active');
-    document.querySelectorAll('.view-pane').forEach(p=>p.classList.remove('active'));
-    document.getElementById('pane-'+state.view).classList.add('active');
+    Object.values(_elPanes).forEach(p=>p.classList.remove('active'));
+    _elPanes[state.view].classList.add('active');
     renderAll();
   });
 });
@@ -1390,32 +1379,40 @@ async function loadHardcodedData(){
   showToast('Data loaded!');
   refreshAll();
 }
+// Shared CSV parser — parses all data rows against a header array into objects
+function _parseCSVRows(lines,headers){
+  return lines.map(line=>{
+    const vals=[];let cur='',inQ=false;
+    for(const c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){vals.push(cur);cur='';}else cur+=c;}
+    vals.push(cur);
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim().replace(/^"|"$/g,''));
+    return obj;
+  });
+}
 function parseTalentCSV(csv){
   const lines=csv.split('\n').filter(l=>l.trim());if(lines.length<2)return[];
   const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
-  return lines.slice(1).map(line=>{const vals=[];let cur='',inQ=false;for(const c of line){if(c==='"'){inQ=!inQ}else if(c===','&&!inQ){vals.push(cur);cur='';}else cur+=c;}vals.push(cur);const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim().replace(/^"|"$/g,''));return obj;})
+  return _parseCSVRows(lines.slice(1),headers)
     .filter(r=>r.Name)
     .map(r=>({...r,Type:r.Type||'birthday',EventName:r.EventName||''}));
 }
 function parseEventCSV(csv){
   const lines=csv.split('\n').filter(l=>l.trim());if(lines.length<2)return[];
   const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
-  return lines.slice(1).map(line=>{const vals=[];let cur='',inQ=false;for(const c of line){if(c==='"'){inQ=!inQ}else if(c===','&&!inQ){vals.push(cur);cur='';}else cur+=c;}vals.push(cur);const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim().replace(/^"|"$/g,''));return obj;})
+  return _parseCSVRows(lines.slice(1),headers)
     .filter(r=>r.Name)
     .map(r=>{
-      // Support both 'Date' (new) and 'Birthday' (legacy) column names
       const dateVal=r.Date||r.Birthday||'';
       if(dateVal.includes('/')){const p=dateVal.split('/');r.Birthday=p.length===3?p[0].padStart(2,'0')+'/'+p[1].padStart(2,'0'):dateVal;}
       else r.Birthday=dateVal;
-      // Map new column names to internal field names
       if(r.Category) r.Generation=r.Category;
       if(r.Region) r.Branch=r.Region;
       r.EventName=r.Name;
       return {...r,Type:r.Type||'event'};
     });
 }
-function updateStatus(){const year=state.activeYear,data=state.allData[year]||[],filtered=getFilteredData(year);document.getElementById('status-bar').textContent=`${filtered.length} of ${data.length} entries • ${year}${isArchive()?' (Archive)':''}`;}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+function updateStatus(){const year=state.activeYear,data=state.allData[year]||[],filtered=getFilteredData(year);_elStatusBar.textContent=`${filtered.length} of ${data.length} entries • ${year}${isArchive()?' (Archive)':''}`;}
+function showToast(msg){_elToast.textContent=msg;_elToast.classList.add('show');setTimeout(()=>_elToast.classList.remove('show'),3000);}
 // Dirty-check cache — skip re-render when state hasn't changed for that view
 const _renderKeys={};
 function _viewKey(extra){return `${state.activeYear}|${state.branch}|${state.eventsOnly}|${state.search}|${extra||''}`;}
