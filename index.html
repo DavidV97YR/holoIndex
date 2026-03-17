@@ -11,7 +11,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="holoIndex">
 <link rel="icon" href="favicon.ico">
-<link rel="icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,9 +68,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .logo-holo{background:linear-gradient(135deg,#ff6eb4,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .logo-index{background:linear-gradient(135deg,#a855f7,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .logo-sub{font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--text-dim);margin-top:4px;}
-
-
-
 /* YEAR SWITCHER */
 #year-switcher{position:relative;z-index:10;display:flex;gap:8px;justify-content:center;padding:0 16px 16px;flex-wrap:wrap;}
 .year-btn{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;transition:all 0.2s;position:relative;}
@@ -139,7 +135,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .this-month-cal-title{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:700;background:linear-gradient(135deg,#f0a0ff,#cc50ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .this-month-cal-year{font-size:13px;color:var(--text-dim);}
 .this-month-cal-count{margin-left:auto;font-size:11px;color:#e8b0ff;background:rgba(180,80,255,0.18);border:1px solid rgba(200,100,255,0.5);padding:2px 10px;border-radius:10px;box-shadow:0 0 10px rgba(180,80,255,0.35);}
-.this-month-cal-body{}
 .this-month-list{padding:22px 22px;overflow-y:auto;max-height:500px;display:flex;flex-direction:column;gap:8px;}
 .this-month-list::-webkit-scrollbar{width:4px}
 .this-month-list::-webkit-scrollbar-track{background:transparent}
@@ -151,9 +146,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
 .bday-row-item:hover{border-color:var(--accent2);background:rgba(192,132,252,0.08);}
 .bday-row-item.is-event{background:rgba(203,213,225,0.04);border-color:rgba(203,213,225,0.18);}
 .bday-row-item.is-event:hover{border-color:rgba(203,213,225,0.4);background:rgba(203,213,225,0.08);}
-.bday-day-badge{flex-shrink:0;min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:12px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;}
-.bday-day-badge.gold{background:linear-gradient(135deg,#334155,#94a3b8);color:#f1f5f9;}
-.bday-day-badge.cyan{background:linear-gradient(135deg,var(--teal),var(--cyan));color:#fff;}
 .bday-row-item.is-debut{background:rgba(34,211,238,0.05);border-color:rgba(34,211,238,0.2);}
 .bday-row-item.is-debut:hover{border-color:rgba(34,211,238,0.5);background:rgba(34,211,238,0.1);}
 .bday-row-item.is-both{background:linear-gradient(135deg,rgba(255,110,180,0.07),rgba(34,211,238,0.07));border-color:rgba(160,200,230,0.35);}
@@ -439,7 +431,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
   .detail-info-row{font-size:12px;padding:7px 0;}
   .detail-countdown{padding:10px;margin-top:10px;}
   .countdown-num{font-size:32px;}
-  #detail-overlay{padding:8px;}
   #day-panel{padding:18px 14px 16px;border-radius:16px;}
   .day-modal-title{font-size:1.2rem;}
   .day-modal-entry{padding:10px 12px;gap:10px;}
@@ -467,8 +458,6 @@ body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg-deep);colo
   <div class="logo"><span class="logo-holo">holo</span><span class="logo-index">Index</span></div>
   <div class="logo-sub">Hololive Birthday & Event Calendar</div>
 </div>
-
-
 
 <div id="day-overlay">
   <div id="day-panel">
@@ -693,8 +682,7 @@ function shortCountdownStr(totalSecs){
 // For events (one-time): returns the fixed date, or null if already past.
 // For birthdays/debuts (recurring): rolls forward to next year if past.
 function nextOccurrence(entry,year){const bd=parseMMDD(entry.Birthday);if(!bd)return null;const now=getToday();let d=new Date(year,bd.month-1,bd.day);d.setHours(0,0,0,0);if(entry.Type==='event')return d<now?null:d;if(d<now)d=new Date(year+1,bd.month-1,bd.day);return d;}
-const TODAY=_TODAY;
-const CURRENT_YEAR=TODAY.getFullYear();
+const CURRENT_YEAR=_TODAY.getFullYear();
 const START_YEAR=2023;
 let state={allData:{},activeYear:CURRENT_YEAR,view:'monthly',branch:'All',eventsOnly:false,search:'',weekOffset:0};
 
