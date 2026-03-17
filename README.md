@@ -26,7 +26,7 @@ A single-page web app for tracking Hololive talent birthdays, debut anniversarie
 
 All data is maintained in two Google Sheets workbooks published as CSV and fetched on page load.
 
-### Talents sheet — 81 rows
+### Talents sheet — 82 rows
 
 One row per talent. Used across all years since birthdays and debut anniversaries recur annually.
 
