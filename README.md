@@ -24,14 +24,38 @@ A single-page web app for tracking Hololive talent birthdays, debut anniversarie
 
 ## Data Sources
 
-All data is pulled live from Google Sheets published as CSV:
+All data is maintained in two Google Sheets workbooks published as CSV and fetched on page load.
 
-| Sheet | Contents |
+### Talents sheet — 81 rows
+
+One row per talent. Used across all years since birthdays and debut anniversaries recur annually.
+
+| Column | Description |
 |---|---|
-| Talent sheet | All talent: name, birthday, debut date, branch, generation, avatar URL, emoji |
-| Year sheets (2023–2026) | Events per year: name, date, category, region, image URL |
+| `Name` | Talent display name |
+| `Birthday` | Format `MM/DD` |
+| `Generation` | e.g. Gen 0, Myth, Promise |
+| `Branch` | JP / EN / ID / DEV_IS |
+| `Emoji` | Fallback emoji if no avatar |
+| `AvatarURL` | Profile image URL |
+| `ImageURL` | Full portrait URL (shown in detail modal) |
+| `DebutDate` | Format `MM/DD/YYYY` |
+| `Type` | Always `birthday` |
 
-Data is fetched in parallel on load and cached by the service worker for offline use.
+### Events sheets — one sheet per year (2023–2026)
+
+Each sheet covers one calendar year. Current row counts: 4 (2023), 4 (2024), 4 (2025), 6 (2026).
+
+| Column | Description |
+|---|---|
+| `Name` | Event display name |
+| `Date` | Format `MM/DD` |
+| `Category` | e.g. Expo, Fes. |
+| `Region` | Target branch (e.g. All, JP) |
+| `Emoji` | Fallback emoji |
+| `AvatarURL` | Event thumbnail URL |
+| `ImageURL` | Full event image URL |
+| `Type` | Always `event` |
 
 ---
 
