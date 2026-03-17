@@ -1080,7 +1080,7 @@ function renderWeekly(){
       const wIsBoth=!isDebutRow_w&&!isEvent&&e.DebutDate&&e.DebutDate.trim()&&bdW&&(()=>{const p=e.DebutDate.split('/');return p.length>=2&&parseInt(p[0])-1===m&&parseInt(p[1])===d;})();
       const chipClass=wIsBoth?'both-chip':isDebutRow_w?'debut-chip':isEvent?'event-chip':'';
       const nameClass=wIsBoth?'both':isDebutRow_w?'cyan':isEvent?'gold':'';
-      const displayName=isEvent?(e.EventName||e.Name):e.Name.split(' ')[0];
+      const displayName=isEvent?(e.EventName||e.Name):e.Name;
       const cleanEw={...e};delete cleanEw._isDebutRow;delete cleanEw._debutDay;
       const wFt=wIsBoth?'both':isDebutRow_w?(bdAlsoMatchesW?'both':'debut'):undefined;
       html+=`<div class="week-chip ${chipClass}" onclick="${_oc(cleanEw,wFt)}"><div class="chip-avatar">${_avHtml(e)}</div><span class="chip-name ${nameClass}">${displayName}</span></div>`;
