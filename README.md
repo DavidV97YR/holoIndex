@@ -1,6 +1,6 @@
 # holoIndex
 
-A single-page web app for tracking Hololive talent birthdays, debut anniversaries, and events — with live countdowns, a multi-year archive, and full offline support via PWA.
+A single-page web app for tracking hololive talent birthdays, debut anniversaries, and events — with live countdowns, a multi-year archive, and full offline support via PWA.
 
 ![HTML](https://img.shields.io/badge/HTML-96.3%25-e34c26?style=flat-square) ![JavaScript](https://img.shields.io/badge/JavaScript-3.7%25-f1e05a?style=flat-square) [![GitHub Pages](https://img.shields.io/badge/deployed-GitHub%20Pages-brightgreen?style=flat-square)](https://davidv97yr.github.io/holoIndex/)
 
@@ -64,6 +64,7 @@ Each sheet covers one calendar year. Current row counts: 4 (2023), 4 (2024), 4 (
 ```
 holoIndex/
 ├── index.html       # Entire app — HTML, CSS, and JS in one file
+├── about.html       # About page
 ├── manifest.json    # PWA manifest
 ├── sw.js            # Service worker (offline + CSV caching)
 ├── favicon.ico      # Site icon
@@ -95,4 +96,4 @@ Live URL: **https://davidv97yr.github.io/holoIndex/**
 
 ## License
 
-Personal project. Data sourced from publicly available Hololive information.
+Personal project. Data sourced from publicly available hololive information.
