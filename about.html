@@ -56,7 +56,7 @@ body{
 .clock-jst .clock-time{background:linear-gradient(135deg,var(--purple),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 
 /* LOGO */
-.logo{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;cursor:default;display:inline-block;}
+.logo{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;letter-spacing:-1px;line-height:1;cursor:default;display:inline-block;}
 .logo-holo{background:linear-gradient(135deg,#ff6eb4,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .logo-index{background:linear-gradient(135deg,#a855f7,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 
@@ -285,15 +285,9 @@ body{
 
 <!-- CLOCK BAR -->
 <div id="clockbar">
-  <div class="clock-item clock-local">
-    <span class="clock-label">Local</span>
-    <span class="clock-time" id="clock-local">--:--:--</span>
-  </div>
+  <div class="clock-item clock-local"><span class="clock-label">Local</span><span class="clock-time" id="clock-local">--:--:--</span></div>
   <span class="logo" style="font-size:22px"><span class="logo-holo">holo</span><span class="logo-index">Index</span></span>
-  <div class="clock-item clock-jst">
-    <span class="clock-label">JST</span>
-    <span class="clock-time" id="clock-jst">--:--:--</span>
-  </div>
+  <div class="clock-item clock-jst"><span class="clock-label">JST</span><span class="clock-time" id="clock-jst">--:--:--</span></div>
 </div>
 
 <!-- MAIN -->
