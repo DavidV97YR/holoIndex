@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>holoIndex — About</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Subsetted to only weights actually used; display=swap prevents render blocking -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
+<style>
+:root {
+  --bg-deep: #0a0612;
+  --bg-card: #12091f;
+  --bg-glass: rgba(20,10,40,0.7);
+  --pink: #ff6eb4;
+  --purple: #a855f7;
+  --purple-deep: #6d28d9;
+  --cyan: #22d3ee;
+  --teal: #14b8a6;
+  --gold: #cbd5e1;
+  --gold-light: #f1f5f9;
+  --border: rgba(168,85,247,0.25);
+  --border-bright: rgba(168,85,247,0.6);
+  --text: #e8d5f5;
+  --text-dim: #9070b0;
+  --text-muted: #5a3f7a;
+  --shadow-purple: 0 0 30px rgba(168,85,247,0.3);
+  --shadow-pink: 0 0 20px rgba(255,110,180,0.4);
+  --surface: #110d1f;
+  --surface2: #1a1430;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  background:var(--bg-deep);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+  position:relative;
+}
+
+/* STARFIELD */
+#starfield{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+/* Static nebula blobs — no JS animation, composited once */
+.nebula{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;will-change:auto;}
+
+/* CLOCK BAR */
+#clockbar{position:sticky;top:0;z-index:100;background:rgba(10,6,18,0.96);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:10px 28px;display:flex;justify-content:space-between;align-items:center;gap:16px;}
+.clock-item{display:flex;align-items:center;gap:10px;font-family:'Playfair Display',serif;}
+.clock-label{font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:700;background:rgba(168,85,247,0.12);border:1px solid var(--border);border-radius:5px;padding:2px 7px;line-height:1.6;}
+.clock-time{font-size:20px;font-weight:700;background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:1px;}
+.clock-jst .clock-time{background:linear-gradient(135deg,var(--purple),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+/* LOGO */
+.logo{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;cursor:default;}
+.logo-holo{background:linear-gradient(135deg,#ff6eb4,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.logo-index{background:linear-gradient(135deg,#a855f7,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+/* NAV LINK */
+.nav-back{
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  font-size:12px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text-dim);
+  text-decoration:none;
+  background:rgba(168,85,247,0.08);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:5px 14px;
+  transition:all 0.2s;
+}
+.nav-back:hover{color:var(--purple);border-color:var(--purple);}
+
+/* MAIN LAYOUT */
+#main{position:relative;z-index:10;max-width:860px;margin:0 auto;padding:48px 24px 80px;}
+
+/* PAGE HEADER */
+.page-header{margin-bottom:48px;}
+.page-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(42px,8vw,72px);
+  font-weight:900;
+  line-height:1;
+  letter-spacing:-2px;
+  margin-bottom:12px;
+}
+.page-title-holo{background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.page-title-index{background:linear-gradient(135deg,var(--purple),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.page-subtitle{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--text-muted);}
+
+/* DIVIDER */
+.section-divider{
+  display:flex;align-items:center;gap:14px;
+  margin:40px 0 20px;
+}
+.section-divider-title{
+  font-family:'Playfair Display',serif;
+  font-size:22px;font-weight:700;
+  color:var(--text);
+  white-space:nowrap;
+}
+.section-divider::after{
+  content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,rgba(168,85,247,0.4),transparent);
+}
+.section-divider::before{
+  content:'';width:5px;height:22px;border-radius:2px;
+  background:linear-gradient(var(--pink),var(--purple));
+  flex-shrink:0;
+}
+
+/* CARDS */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:24px 28px;
+  margin-bottom:16px;
+  transition:border-color 0.2s,box-shadow 0.2s;
+}
+.card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-purple);}
+
+/* DISCLAIMER CARD */
+.disclaimer-card{
+  background:linear-gradient(135deg,rgba(255,110,180,0.06),rgba(168,85,247,0.04));
+  border-color:rgba(255,110,180,0.2);
+}
+.disclaimer-card p{
+  font-size:14px;line-height:1.75;color:var(--text-dim);
+  margin-bottom:10px;
+}
+.disclaimer-card p:last-child{margin-bottom:0;}
+.disclaimer-card a{color:var(--pink);text-decoration:none;}
+.disclaimer-card a:hover{text-decoration:underline;}
+
+/* ABOUT TEXT */
+.about-lead{
+  font-size:16px;line-height:1.8;color:var(--text-dim);
+  margin-bottom:0;
+}
+.about-lead a{color:var(--cyan);text-decoration:none;}
+.about-lead a:hover{text-decoration:underline;}
+
+/* FEATURE GRID */
+.feature-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:12px;
+  margin-bottom:0;
+}
+.feature-item{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px;
+  display:flex;align-items:flex-start;gap:12px;
+  transition:border-color 0.2s;
+}
+.feature-item:hover{border-color:rgba(168,85,247,0.5);}
+.feature-icon{font-size:22px;flex-shrink:0;margin-top:1px;}
+.feature-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;}
+.feature-desc{font-size:12px;color:var(--text-muted);line-height:1.5;}
+
+/* DATA SOURCE */
+.source-row{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 16px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  margin-bottom:8px;
+  font-size:13px;
+}
+.source-icon{font-size:18px;flex-shrink:0;}
+.source-label{color:var(--text-muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
+.source-name{color:var(--text);font-weight:700;}
+.source-link{margin-left:auto;font-size:11px;color:var(--cyan);text-decoration:none;letter-spacing:0.5px;}
+.source-link:hover{text-decoration:underline;}
+
+/* TECH STACK */
+.tech-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.tech-pill{
+  padding:5px 14px;
+  border-radius:20px;
+  font-size:12px;font-weight:700;letter-spacing:0.5px;
+  border:1px solid var(--border);
+  background:rgba(168,85,247,0.08);
+  color:var(--text-dim);
+}
+.tech-pill.highlight{
+  background:rgba(168,85,247,0.18);
+  border-color:rgba(168,85,247,0.5);
+  color:var(--purple);
+}
+
+/* LINKS */
+.link-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.link-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 20px;
+  border-radius:25px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--text-dim);
+  text-decoration:none;
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  font-size:13px;font-weight:700;
+  letter-spacing:0.5px;
+  transition:all 0.2s;
+  cursor:pointer;
+}
+.link-btn:hover{border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,0.08);}
+.link-btn.primary{
+  background:linear-gradient(135deg,var(--purple-deep),var(--purple));
+  border-color:transparent;color:white;
+  box-shadow:var(--shadow-purple);
+}
+.link-btn.primary:hover{opacity:0.9;transform:translateY(-1px);}
+
+/* AUTHOR */
+.author-card{
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+}
+.author-avatar{
+  width:64px;height:64px;border-radius:50%;
+  background:linear-gradient(135deg,var(--purple-deep),var(--pink));
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;flex-shrink:0;
+  box-shadow:var(--shadow-purple);
+}
+.author-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--text);}
+.author-handle{font-size:12px;color:var(--text-muted);letter-spacing:1px;margin-top:2px;}
+.author-links{display:flex;gap:8px;margin-top:8px;}
+.author-link{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;color:var(--text-dim);text-decoration:none;
+  padding:3px 10px;border-radius:10px;
+  border:1px solid var(--border);
+  transition:all 0.2s;
+}
+.author-link:hover{color:var(--purple);border-color:var(--purple);}
+
+/* STATS ROW */
+.stats-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:12px;margin-bottom:0;
+}
+.stat-box{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:12px;padding:16px;text-align:center;
+}
+.stat-num{
+  font-family:'Playfair Display',serif;font-size:28px;font-weight:700;
+  background:linear-gradient(135deg,var(--pink),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;line-height:1.1;
+}
+.stat-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-top:4px;display:block;}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(168,85,247,0.3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--purple)}
+
+/* RESPONSIVE */
+@media(max-width:600px){
+  #clockbar{flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 14px;}
+  .clock-time{font-size:16px;}
+  #main{padding:32px 16px 60px;}
+  .card{padding:18px 16px;}
+  .author-card{gap:14px;}
+}
+</style>
+</head>
+<body>
+
+<div id="starfield"></div>
+
+<!-- CLOCK BAR -->
+<div id="clockbar">
+  <div class="clock-item clock-local">
+    <span class="clock-label">Local</span>
+    <span class="clock-time" id="clock-local">--:--:--</span>
+  </div>
+  <a class="logo" href="index.html"><span class="logo-holo">holo</span><span class="logo-index">Index</span></a>
+  <div class="clock-item clock-jst">
+    <span class="clock-label">JST</span>
+    <span class="clock-time" id="clock-jst">--:--:--</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- PAGE TITLE -->
+  <div class="page-header">
+    <div class="page-title">
+      <span class="page-title-holo">holo</span><span class="page-title-index">Index</span>
+    </div>
+    <div class="page-subtitle">About This Site</div>
+  </div>
+
+  <!-- WHAT IS THIS -->
+  <div class="section-divider">
+    <div class="section-divider-title">What is holoIndex?</div>
+  </div>
+  <div class="card">
+    <p class="about-lead">
+      <strong style="color:var(--text)">holoIndex</strong> is an unofficial fan-made calendar for tracking
+      <a href="https://hololive.hololivepro.com/" target="_blank">hololive</a> talent birthdays,
+      debut anniversaries, and events — with live countdowns, multi-year archives, and full offline support.
+      <br><br>
+      This site is not affiliated with Cover Corporation, hololive production, or any related parties.
+      All talent names, images, and associated content belong to their respective rights holders.
+    </p>
+  </div>
+
+  <!-- STATS -->
+  <div class="card" style="padding:20px 24px;">
+    <div class="stats-row">
+      <div class="stat-box">
+        <span class="stat-num">82</span>
+        <span class="stat-label">Talents</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">4</span>
+        <span class="stat-label">Branches</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">2023–</span>
+        <span class="stat-label">Archive</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">PWA</span>
+        <span class="stat-label">Offline Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="section-divider">
+    <div class="section-divider-title">Features</div>
+  </div>
+  <div class="card" style="padding:20px;">
+    <div class="feature-grid">
+      <div class="feature-item">
+        <div class="feature-icon">🗓</div>
+        <div><div class="feature-title">Monthly Grid</div><div class="feature-desc">Browse all 12 months with mini calendars and entry rows</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📜</div>
+        <div><div class="feature-title">Timeline</div><div class="feature-desc">Horizontal scroll timeline sorted chronologically by month</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⭐</div>
+        <div><div class="feature-title">Upcoming</div><div class="feature-desc">Live countdown to the next birthday or event</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📅</div>
+        <div><div class="feature-title">Weekly</div><div class="feature-desc">7-day week view with prev/next navigation</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⏱</div>
+        <div><div class="feature-title">Live Countdowns</div><div class="feature-desc">Second-level ticking for events within 7 days</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">🔍</div>
+        <div><div class="feature-title">Search & Filter</div><div class="feature-desc">Filter by branch (JP / EN / ID / DEV_IS) or search by name</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📁</div>
+        <div><div class="feature-title">Multi-Year Archive</div><div class="feature-desc">Browse past years from 2023 onwards</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📲</div>
+        <div><div class="feature-title">PWA / Offline</div><div class="feature-desc">Install as an app and use fully offline via service worker</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA SOURCES -->
+  <div class="section-divider">
+    <div class="section-divider-title">Data Sources</div>
+  </div>
+  <div class="card">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;">
+      All talent and event data is maintained in Google Sheets published as CSV and fetched on page load.
+      Data is cached locally by the service worker for offline use.
+    </p>
+    <div class="source-row">
+      <div class="source-icon">👤</div>
+      <div>
+        <div class="source-label">Talents Sheet</div>
+        <div class="source-name">82 talents — birthdays, debut dates, avatars</div>
+      </div>
+    </div>
+    <div class="source-row">
+      <div class="source-icon">🎪</div>
+      <div>
+        <div class="source-label">Events Sheets</div>
+        <div class="source-name">One sheet per year (2023–2026)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TECH STACK -->
+  <div class="section-divider">
+    <div class="section-divider-title">Built With</div>
+  </div>
+  <div class="card">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;">
+      No frameworks. No build step. Just a single HTML file with vanilla JavaScript — fast, simple, and easy to deploy anywhere.
+    </p>
+    <div class="tech-pills">
+      <span class="tech-pill highlight">Vanilla JS</span>
+      <span class="tech-pill">Service Worker (PWA)</span>
+      <span class="tech-pill">Google Sheets CSV</span>
+      <span class="tech-pill">GitHub Pages</span>
+    </div>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="section-divider">
+    <div class="section-divider-title">Disclaimer</div>
+  </div>
+  <div class="card disclaimer-card">
+    <p>This is an unofficial fan site and is not affiliated with, endorsed by, or connected to Cover Corporation or hololive production in any way.</p>
+    <p>All talent names, likenesses, artwork, and associated intellectual property belong to Cover Corporation and their respective creators. Avatar and portrait images used on this site are sourced from publicly available official materials.</p>
+    <p>This site is intended for fan use only.</p>
+  </div>
+
+  <!-- LINKS -->
+  <div class="section-divider">
+    <div class="section-divider-title">Links</div>
+  </div>
+  <div class="card">
+    <div class="link-grid">
+      <a class="link-btn" href="https://github.com/" target="_blank">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        Source Code
+      </a>
+      <a class="link-btn" href="https://hololive.hololivepro.com/" target="_blank">🌐 hololive Official</a>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid var(--border);">
+    <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;margin-bottom:6px;">
+      <span style="background:linear-gradient(135deg,var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">holo</span><span style="background:linear-gradient(135deg,var(--purple),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Index</span>
+    </div>
+    <div style="font-size:11px;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;">Unofficial Fan Site · Not affiliated with Cover Corp</div>
+  </div>
+
+</div>
+
+<script>
+// Starfield — IIFE so nothing leaks to global scope
+(function(){
+  const sf=document.getElementById('starfield');
+  // Static nebula blobs (no animation, cheap)
+  [{x:10,y:20,size:300,color:'rgba(168,85,247,0.06)'},{x:80,y:60,size:400,color:'rgba(255,110,180,0.05)'},{x:50,y:80,size:350,color:'rgba(34,211,238,0.04)'}].forEach(n=>{const d=document.createElement('div');d.className='nebula';d.style.cssText=`left:${n.x}%;top:${n.y}%;width:${n.size}px;height:${n.size}px;background:${n.color};margin-left:-${n.size/2}px;margin-top:-${n.size/2}px;`;sf.appendChild(d);});
+  // Canvas starfield — single composited layer, no per-star DOM nodes
+  const canvas=document.createElement('canvas');canvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;';sf.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  const COLORS=['#ffffff','#ffd6f5','#d6b3ff','#b3f5ff','#fbbf24'];
+  let stars=[];
+  function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;stars=[];for(let i=0;i<180;i++){const size=Math.random()<0.05?2.5:Math.random()<0.2?1.5:0.8;stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,size,color:COLORS[Math.floor(Math.random()*5)],lo:Math.random()*0.3+0.1,hi:Math.random()*0.5+0.5,dur:(Math.random()*4+2)*1000,offset:Math.random()*6000});}}
+  resize();
+  let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(resize,200);});
+  let lastFrame=0;
+  const FPS_CAP=24; // cap at 24fps — plenty for stars, saves battery
+  const FRAME_MS=1000/FPS_CAP;
+  function draw(ts){requestAnimationFrame(draw);if(ts-lastFrame<FRAME_MS)return;lastFrame=ts;ctx.clearRect(0,0,canvas.width,canvas.height);stars.forEach(s=>{const t=(ts+s.offset)%s.dur/s.dur;const alpha=s.lo+(s.hi-s.lo)*(t<0.5?t*2:(1-t)*2);ctx.globalAlpha=alpha;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,s.y,s.size,0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}
+  requestAnimationFrame(draw);
+})();
+
+// Cache clock refs — queried every second, must not re-lookup each call
+const _elClockLocal=document.getElementById('clock-local');
+const _elClockJst=document.getElementById('clock-jst');
+function updateClocks(){const now=new Date();_elClockLocal.textContent=now.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});const jst=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));_elClockJst.textContent=jst.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+updateClocks();setInterval(updateClocks,1000);
+</script>
+</body>
+</html>
