@@ -915,54 +915,118 @@ function showErrorBanner(msg,onRetry){
 }
 function hideErrorBanner(){if(_elErrorBanner)_elErrorBanner.classList.remove('show');}
 
+// Two-phase data load (mobile bandwidth optimization):
+//   Phase 1 — fetch talent sheet + the active year only. Render as soon as both arrive.
+//   Phase 2 — fetch the remaining year sheets in the background on requestIdleCallback,
+//             so the user sees content immediately and archive years populate as they arrive.
+// Errors from either phase surface in the same #error-banner.
+let _loadErrors=[];
+let _loadedTalentRows=[];
+
 async function loadHardcodedData(){
   hideErrorBanner();
   showToast('Loading data…');
-  const [talentResult, ...yearResults] = await Promise.allSettled([
+  _loadErrors=[];
+  _loadedTalentRows=[];
+
+  const activeYr=CURRENT_YEAR;
+  const activeUrl=HARDCODED_SOURCES.years[activeYr];
+
+  // ── PHASE 1: critical (talent + current year) ────────────────────────────
+  const phase1=[
     _fetchWithRetry(HARDCODED_SOURCES.talent),
-    ...Object.entries(HARDCODED_SOURCES.years).map(([yr,url])=>
-      _fetchWithRetry(url).then(t=>({yr:parseInt(yr),data:t}))
-    )
-  ]);
+    activeUrl?_fetchWithRetry(activeUrl):Promise.reject(new Error('no url for '+activeYr))
+  ];
+  const [talentRes,activeRes]=await Promise.allSettled(phase1);
+
   let talentRows=[];
-  const errors=[];
-  if(talentResult.status==='fulfilled'){
-    try{talentRows=parseTalentCSV(talentResult.value);}
-    catch(e){errors.push('parse talent sheet ('+e.message+')');}
+  if(talentRes.status==='fulfilled'){
+    try{talentRows=parseTalentCSV(talentRes.value);}
+    catch(e){_loadErrors.push('parse talent sheet ('+e.message+')');}
   } else {
-    errors.push('load talent sheet ('+(talentResult.reason&&talentResult.reason.message||'unknown')+')');
+    _loadErrors.push('load talent sheet ('+(talentRes.reason&&talentRes.reason.message||'unknown')+')');
   }
+  _loadedTalentRows=talentRows;
+
   const eventsByYear={};
-  yearResults.forEach((res,i)=>{
-    const yr=Object.keys(HARDCODED_SOURCES.years)[i];
-    if(res.status==='fulfilled'){
-      try{eventsByYear[res.value.yr]=parseEventCSV(res.value.data);}
-      catch(e){errors.push('parse '+yr+' events ('+e.message+')');}
-    } else {
-      errors.push('load '+yr+' events ('+(res.reason&&res.reason.message||'unknown')+')');
-    }
-  });
-  const allYears=new Set(Object.keys(eventsByYear).map(Number));
-  if(talentRows.length)Array.from({length:CURRENT_YEAR-START_YEAR+1},(_,i)=>START_YEAR+i).forEach(y=>allYears.add(y));
-  if(!allYears.size)allYears.add(CURRENT_YEAR);
+  if(activeRes.status==='fulfilled'){
+    try{eventsByYear[activeYr]=parseEventCSV(activeRes.value);}
+    catch(e){_loadErrors.push('parse '+activeYr+' events ('+e.message+')');}
+  } else {
+    _loadErrors.push('load '+activeYr+' events ('+(activeRes.reason&&activeRes.reason.message||'unknown')+')');
+  }
+
+  // Seed _entryMap and state with what we have so far
   _entryMap.clear();
   talentRows.forEach(e=>{if(!e._id){e._id=++_entryIdCounter;}_entryMap.set(e._id,e);});
   Object.values(eventsByYear).forEach(rows=>rows.forEach(e=>{if(!e._id){e._id=++_entryIdCounter;}_entryMap.set(e._id,e);}));
+
+  // Build year list. If talent loaded, expose every year in [START_YEAR..CURRENT_YEAR] right
+  // away so the year switcher renders all tabs — events for non-active years arrive in phase 2.
   state.allData={};
-  allYears.forEach(y=>{state.allData[y]=[...talentRows,...(eventsByYear[y]||[])];});
+  if(talentRows.length){
+    for(let y=START_YEAR;y<=CURRENT_YEAR;y++){
+      state.allData[y]=[...talentRows,...(eventsByYear[y]||[])];
+    }
+  } else if(eventsByYear[activeYr]){
+    state.allData[activeYr]=eventsByYear[activeYr];
+  } else {
+    state.allData[CURRENT_YEAR]=[];
+  }
   const years=Object.keys(state.allData).map(Number).sort((a,b)=>b-a);
   state.activeYear=years.includes(CURRENT_YEAR)?CURRENT_YEAR:years[0];
 
-  if(errors.length){
-    const allFailed=talentRows.length===0&&Object.keys(eventsByYear).length===0;
-    const msg=allFailed
-      ? 'Could not load data. Check your connection and try again.'
-      : 'Some data failed to load: '+errors.join('; ');
-    showErrorBanner(msg,loadHardcodedData);
-  } else {
-    showToast('Data loaded!');
-  }
+  // First paint — user sees real content here
   refreshAll();
+  if(!_loadErrors.length) showToast('Data loaded!');
+  else _showLoadErrors();
+
+  // ── PHASE 2: background-load remaining years ─────────────────────────────
+  const otherYears=Object.entries(HARDCODED_SOURCES.years).filter(([yr])=>parseInt(yr)!==activeYr);
+  if(!otherYears.length)return;
+
+  const kickoff=()=>_loadRemainingYears(otherYears);
+  if('requestIdleCallback' in window){
+    requestIdleCallback(kickoff,{timeout:3000});
+  } else {
+    setTimeout(kickoff,500);
+  }
+}
+
+async function _loadRemainingYears(yearEntries){
+  const results=await Promise.allSettled(
+    yearEntries.map(([yr,url])=>_fetchWithRetry(url).then(t=>({yr:parseInt(yr),data:t})))
+  );
+  let added=false;
+  results.forEach((res,i)=>{
+    const yr=yearEntries[i][0];
+    if(res.status==='fulfilled'){
+      try{
+        const rows=parseEventCSV(res.value.data);
+        rows.forEach(e=>{if(!e._id){e._id=++_entryIdCounter;}_entryMap.set(e._id,e);});
+        state.allData[res.value.yr]=[..._loadedTalentRows,...rows];
+        added=true;
+      } catch(e){
+        _loadErrors.push('parse '+yr+' events ('+e.message+')');
+      }
+    } else {
+      _loadErrors.push('load '+yr+' events ('+(res.reason&&res.reason.message||'unknown')+')');
+    }
+  });
+  if(added){
+    // Invalidate the filter cache so any active view rebuilds with the new rows
+    _filteredCache={key:null,data:null};
+    refreshAll();
+  }
+  if(_loadErrors.length)_showLoadErrors();
+}
+
+function _showLoadErrors(){
+  const allFailed=_entryMap.size===0;
+  const msg=allFailed
+    ? 'Could not load data. Check your connection and try again.'
+    : 'Some data failed to load: '+_loadErrors.join('; ');
+  showErrorBanner(msg,loadHardcodedData);
 }
 
 // Strip HTML control characters from CSV cell values; structural escaping happens at render

@@ -1,6 +1,9 @@
 // holoIndex — shared starfield + clock (used by index.html and about.html)
 (function(){
   // ── STARFIELD ──────────────────────────────────────────────────────────────
+  // Respect users who request reduced motion: render a static starfield (one frame, no animation).
+  // Saves battery on mobile and is an a11y win. matchMedia is supported on every modern browser.
+  const reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const sf=document.getElementById('starfield');
   if(sf){
     [{x:10,y:20,size:300,color:'rgba(168,85,247,0.06)'},
@@ -17,30 +20,27 @@
     const ctx=canvas.getContext('2d');
     const COLORS=['#ffffff','#ffd6f5','#d6b3ff','#b3f5ff','#fbbf24'];
     let stars=[];
+    // Star count scales with viewport area so low-end phones don't push 180 stars at 360px wide.
+    // Desktop (≥1280×720) keeps the full 180; phones land around 60-90.
+    function targetStarCount(){
+      const area=window.innerWidth*window.innerHeight;
+      const scale=Math.min(1,area/(1280*720));
+      return Math.max(40,Math.round(180*scale));
+    }
     function resize(){
       canvas.width=window.innerWidth;
       canvas.height=window.innerHeight;
       stars=[];
-      for(let i=0;i<180;i++){
+      const count=targetStarCount();
+      for(let i=0;i<count;i++){
         const size=Math.random()<0.05?2.5:Math.random()<0.2?1.5:0.8;
         stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,size,color:COLORS[Math.floor(Math.random()*5)],lo:Math.random()*0.3+0.1,hi:Math.random()*0.5+0.5,dur:(Math.random()*4+2)*1000,offset:Math.random()*6000});
       }
     }
-    resize();
-    let resizeTimer;
-    window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(resize,200);});
-    let lastFrame=0;
-    const FPS_CAP=24;
-    const FRAME_MS=1000/FPS_CAP;
-    function draw(ts){
-      requestAnimationFrame(draw);
-      if(ts-lastFrame<FRAME_MS)return;
-      lastFrame=ts;
+    function drawStatic(){
       ctx.clearRect(0,0,canvas.width,canvas.height);
       stars.forEach(s=>{
-        const t=(ts+s.offset)%s.dur/s.dur;
-        const alpha=s.lo+(s.hi-s.lo)*(t<0.5?t*2:(1-t)*2);
-        ctx.globalAlpha=alpha;
+        ctx.globalAlpha=(s.lo+s.hi)/2;
         ctx.fillStyle=s.color;
         ctx.beginPath();
         ctx.arc(s.x,s.y,s.size,0,Math.PI*2);
@@ -48,7 +48,33 @@
       });
       ctx.globalAlpha=1;
     }
-    requestAnimationFrame(draw);
+    resize();
+    let resizeTimer;
+    window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{resize();if(reduceMotion)drawStatic();},200);});
+    if(reduceMotion){
+      drawStatic();
+    } else {
+      let lastFrame=0;
+      const FPS_CAP=24;
+      const FRAME_MS=1000/FPS_CAP;
+      function draw(ts){
+        requestAnimationFrame(draw);
+        if(ts-lastFrame<FRAME_MS)return;
+        lastFrame=ts;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        stars.forEach(s=>{
+          const t=(ts+s.offset)%s.dur/s.dur;
+          const alpha=s.lo+(s.hi-s.lo)*(t<0.5?t*2:(1-t)*2);
+          ctx.globalAlpha=alpha;
+          ctx.fillStyle=s.color;
+          ctx.beginPath();
+          ctx.arc(s.x,s.y,s.size,0,Math.PI*2);
+          ctx.fill();
+        });
+        ctx.globalAlpha=1;
+      }
+      requestAnimationFrame(draw);
+    }
   }
 
   // ── CLOCKS ─────────────────────────────────────────────────────────────────
