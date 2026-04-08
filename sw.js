@@ -4,14 +4,26 @@
 //   - CSV data sheets: stale-while-revalidate (instant on repeat visits)
 //   - Everything else: network-first with cache fallback
 
-const SHELL_CACHE = 'holoindex-shell-v1';
+// ── VERSIONING ──
+// Bump SHELL_CACHE whenever any file in SHELL_FILES changes (HTML/CSS/JS).
+// Bump DATA_CACHE only if the CSV cache layout itself changes (rare).
+const SHELL_CACHE = 'holoindex-shell-v2';
 const DATA_CACHE  = 'holoindex-data-v1';
 
-// Files that make up the app shell — cached on install for offline use
-// Update SHELL_CACHE version string above whenever index.html changes
+// App shell — cached on install for offline use.
+// Paths are scoped to the GitHub Pages deploy at /holoIndex/.
+// addAll() is atomic: if any URL 404s, the whole install fails.
 const SHELL_FILES = [
   '/holoIndex/',
-  '/holoIndex/manifest.json'
+  '/holoIndex/index.html',
+  '/holoIndex/about.html',
+  '/holoIndex/styles.css',
+  '/holoIndex/shared.js',
+  '/holoIndex/app.js',
+  '/holoIndex/manifest.json',
+  '/holoIndex/favicon.ico',
+  '/holoIndex/icons/icon-192.png',
+  '/holoIndex/icons/icon-512.png'
 ];
 
 const CSV_PATTERN = /docs\.google\.com.*output=csv/;
