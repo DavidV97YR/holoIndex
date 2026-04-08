@@ -2,7 +2,7 @@
 
 A single-page web app for tracking hololive talent birthdays, debut anniversaries, and events — with live countdowns, a multi-year archive, and full offline support via PWA.
 
-![HTML](https://img.shields.io/badge/HTML-96.3%25-e34c26?style=flat-square) ![JavaScript](https://img.shields.io/badge/JavaScript-3.7%25-f1e05a?style=flat-square) [![GitHub Pages](https://img.shields.io/badge/deployed-GitHub%20Pages-brightgreen?style=flat-square)](https://davidv97yr.github.io/holoIndex/)
+![JavaScript](https://img.shields.io/badge/JavaScript-50.4%25-f1e05a?style=flat-square) ![HTML](https://img.shields.io/badge/HTML-46.0%25-e34c26?style=flat-square) ![CSS](https://img.shields.io/badge/CSS-3.6%25-563d7c?style=flat-square) [![GitHub Pages](https://img.shields.io/badge/deployed-GitHub%20Pages-brightgreen?style=flat-square)](https://davidv97yr.github.io/holoIndex/)
 
 ---
 
