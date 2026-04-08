@@ -19,6 +19,8 @@ A single-page web app for tracking hololive talent birthdays, debut anniversarie
 - **Local + JST clocks** — Sticky clock bar always visible
 - **PWA** — Installable, fully offline via service worker with CSV caching
 - **Starfield background** — Canvas-based, 24fps-capped, battery-friendly
+- **Accessible motion** — Respects `prefers-reduced-motion` (renders a static starfield)
+- **Mobile-tuned** — Viewport-scaled star count, safe-area-inset padding, no tap-flash
 
 ---
 
@@ -63,13 +65,18 @@ Each sheet covers one calendar year. Current row counts: 4 (2023), 4 (2024), 4 (
 
 ```
 holoIndex/
-├── index.html       # Entire app — HTML, CSS, and JS in one file
+├── index.html       # Main page shell (HTML only)
 ├── about.html       # About page
+├── styles.css       # Shared CSS for index + about
+├── shared.js        # Starfield + clocks (loaded by both pages)
+├── app.js           # All app logic — state, fetching, rendering, modals
 ├── manifest.json    # PWA manifest
 ├── sw.js            # Service worker (offline + CSV caching)
 ├── favicon.ico      # Site icon
 └── icons/           # PWA icons (icon-192.png, etc.)
 ```
+
+No build step. All files are served as-is from GitHub Pages.
 
 ---
 
@@ -83,7 +90,11 @@ Live URL: **https://davidv97yr.github.io/holoIndex/**
 
 ## Architecture Notes
 
-- **No framework, no build toolchain** — vanilla JS, single HTML file
+- **No framework, no build toolchain** — vanilla JS, plain HTML/CSS, served directly
+- **Two-phase data load** — talent sheet + active year fetch first and unblock first paint; archive years are fetched in the background on `requestIdleCallback`
+- **Fetch resilience** — every CSV request runs through an `AbortController`-based 15s timeout with one retry; failures surface in a dismissable error banner with a retry button
+- **XSS-safe rendering** — every CSV-derived value passes through an `_esc()` HTML escape and an `_safeUrl()` scheme guard before reaching `innerHTML`; no `JSON.stringify`-into-attribute fallbacks
+- **Delegated event handling** — clicks and image-error fallbacks are handled via a single document-level listener using `data-*` attributes; no inline `onclick`/`onerror`
 - **Dirty-check render keys** — views only re-render when filter state actually changes
 - **Memoized parsing** — `parseMMDD` and `daysUntil` results are cached to avoid redundant computation on large datasets
 - **IntersectionObserver lazy loading** — month card entry rows are rendered only as they scroll into view
@@ -91,6 +102,7 @@ Live URL: **https://davidv97yr.github.io/holoIndex/**
 - **Cached DOM refs** — all frequently-accessed elements (overlays, panes, clocks, filter buttons) are queried once at startup
 - **Shared Intl formatters** — `Intl.DateTimeFormat` instances are module-level constants, not re-instantiated per render
 - **O(1) day modal lookup** — a pre-built `Map` keyed by `"month-day"` replaces per-tap data filtering
+- **Service worker strategy** — cache-first for the app shell, stale-while-revalidate for CSV sheets, network-first for everything else
 
 ---
 
