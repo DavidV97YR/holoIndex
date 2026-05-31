@@ -5,9 +5,6 @@
 //   - Images (avatars, event images): cache-first (immutable URLs)
 //   - Everything else: network-first with cache fallback
 
-// ── VERSIONING ──
-// Bump SHELL_CACHE whenever any file in SHELL_FILES changes (HTML/CSS/JS).
-// Bump DATA_CACHE only if the CSV cache layout itself changes (rare).
 const SHELL_CACHE = 'holoindex-shell-v3';
 const DATA_CACHE  = 'holoindex-data-v2';
 const IMG_CACHE   = 'holoindex-img-v1';
@@ -29,7 +26,7 @@ const SHELL_FILES = [
 const CSV_PATTERN  = /docs\.google\.com.*output=csv/;
 const FONT_PATTERN = /fonts\.(googleapis|gstatic)\.com/;
 
-const MAX_IMG_ENTRIES = 300;
+const MAX_IMG_BYTES = 100 * 1024 * 1024; // 100 MB (shared across origin)
 
 // ── Install: pre-cache the app shell ─────────────────────────────────────────
 self.addEventListener('install', event => {
@@ -67,19 +64,19 @@ self.addEventListener('fetch', event => {
 
   // Google Fonts — cache-first
   if (FONT_PATTERN.test(url)) {
-    event.respondWith(cacheFirst(request, SHELL_CACHE, false));
+    event.respondWith(cacheFirst(request, SHELL_CACHE));
     return;
   }
 
-  // Images — cache-first (avatar/event images from AvatarURL/ImageURL fields)
+  // Images — cache-first (avatar/event images regardless of host)
   if (request.destination === 'image') {
-    event.respondWith(cacheFirst(request, IMG_CACHE, true));
+    event.respondWith(cacheFirst(request, IMG_CACHE));
     return;
   }
 
   // App shell — cache-first with background refresh
   if (request.mode === 'navigate' || SHELL_FILES.some(f => url.includes(f))) {
-    event.respondWith(cacheFirst(request, SHELL_CACHE, false));
+    event.respondWith(cacheFirst(request, SHELL_CACHE));
     return;
   }
 
@@ -103,14 +100,14 @@ function staleWhileRevalidate(request, cacheName) {
   );
 }
 
-function cacheFirst(request, cacheName, trim) {
+function cacheFirst(request, cacheName) {
   return caches.open(cacheName).then(cache =>
     cache.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(resp => {
         if (resp.ok) {
           cache.put(request, resp.clone());
-          if (trim) trimCache(cacheName, MAX_IMG_ENTRIES);
+          if (cacheName === IMG_CACHE) trimCache(IMG_CACHE);
         }
         return resp;
       });
@@ -129,11 +126,17 @@ function networkFirst(request, cacheName) {
     .catch(() => caches.match(request));
 }
 
-// ── Cache size trim (FIFO) ────────────────────────────────────────────────────
-async function trimCache(cacheName, maxEntries) {
+// ── Cache size trim (size-based, FIFO) ───────────────────────────────────────
+async function trimCache(cacheName) {
+  const estimate = await navigator.storage.estimate();
+  const used = estimate.usage || 0;
+  if (used < MAX_IMG_BYTES) return;
+
   const cache = await caches.open(cacheName);
   const keys  = await cache.keys();
-  if (keys.length > maxEntries) {
-    await Promise.all(keys.slice(0, keys.length - maxEntries).map(k => cache.delete(k)));
+  for (const key of keys) {
+    await cache.delete(key);
+    const newEstimate = await navigator.storage.estimate();
+    if ((newEstimate.usage || 0) < MAX_IMG_BYTES) break;
   }
 }
