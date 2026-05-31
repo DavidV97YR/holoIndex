@@ -5,11 +5,10 @@
 //   - Images (avatars, event images): cache-first (immutable URLs)
 //   - Everything else: network-first with cache fallback
 
-const SHELL_CACHE = 'holoindex-shell-v3';
+const SHELL_CACHE = 'holoindex-shell-v4';
 const DATA_CACHE  = 'holoindex-data-v2';
-const IMG_CACHE   = 'holoindex-img-v1';
+const IMG_CACHE   = 'holoindex-img-v2';
 
-// App shell — cached on install for offline use.
 const SHELL_FILES = [
   '/holoIndex/',
   '/holoIndex/index.html',
@@ -23,12 +22,14 @@ const SHELL_FILES = [
   '/holoIndex/icons/icon-512.png'
 ];
 
-const CSV_PATTERN  = /docs\.google\.com.*output=csv/;
-const FONT_PATTERN = /fonts\.(googleapis|gstatic)\.com/;
+const CSV_PATTERN     = /docs\.google\.com.*output=csv/;
+const FONT_PATTERN    = /fonts\.(googleapis|gstatic)\.com/;
+const R2_DOMAIN       = 'pub-c5822af30923465a9d44f6fb66d71da6.r2.dev';
+const CDN_IMG_PATTERN = new RegExp(R2_DOMAIN.replace(/\./g, '\\.'));
 
 const MAX_IMG_BYTES = 100 * 1024 * 1024; // 100 MB (shared across origin)
 
-// ── Install: pre-cache the app shell ─────────────────────────────────────────
+// ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
@@ -37,50 +38,43 @@ self.addEventListener('install', event => {
   );
 });
 
-// ── Activate: delete outdated caches ─────────────────────────────────────────
+// ── Activate ──────────────────────────────────────────────────────────────────
 self.addEventListener('activate', event => {
   const validCaches = [SHELL_CACHE, DATA_CACHE, IMG_CACHE];
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys
-          .filter(k => !validCaches.includes(k))
-          .map(k => caches.delete(k))
+        keys.filter(k => !validCaches.includes(k)).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
 });
 
-// ── Fetch: route requests by type ────────────────────────────────────────────
+// ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = request.url;
 
-  // CSV data sheets — stale-while-revalidate
   if (CSV_PATTERN.test(url)) {
     event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
     return;
   }
 
-  // Google Fonts — cache-first
   if (FONT_PATTERN.test(url)) {
     event.respondWith(cacheFirst(request, SHELL_CACHE));
     return;
   }
 
-  // Images — cache-first (avatar/event images regardless of host)
-  if (request.destination === 'image') {
+  if (CDN_IMG_PATTERN.test(url)) {
     event.respondWith(cacheFirst(request, IMG_CACHE));
     return;
   }
 
-  // App shell — cache-first with background refresh
   if (request.mode === 'navigate' || SHELL_FILES.some(f => url.includes(f))) {
     event.respondWith(cacheFirst(request, SHELL_CACHE));
     return;
   }
 
-  // Everything else — network-first, fall back to cache
   event.respondWith(networkFirst(request, SHELL_CACHE));
 });
 
