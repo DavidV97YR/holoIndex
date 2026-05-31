@@ -99,7 +99,9 @@ function cacheFirst(request, cacheName) {
     cache.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(resp => {
-        if (resp.ok) {
+        // resp.status === 0 handles opaque cross-origin responses (e.g. R2 images),
+        // which Firefox correctly marks as non-ok per spec even when the fetch succeeded.
+        if (resp.ok || resp.status === 0) {
           cache.put(request, resp.clone());
           if (cacheName === IMG_CACHE) trimCache(IMG_CACHE);
         }
@@ -122,6 +124,7 @@ function networkFirst(request, cacheName) {
 
 // ── Cache size trim (size-based, FIFO) ───────────────────────────────────────
 async function trimCache(cacheName) {
+  if (!navigator.storage || !navigator.storage.estimate) return;
   const estimate = await navigator.storage.estimate();
   const used = estimate.usage || 0;
   if (used < MAX_IMG_BYTES) return;
