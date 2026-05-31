@@ -27,7 +27,7 @@ const FONT_PATTERN    = /fonts\.(googleapis|gstatic)\.com/;
 const R2_DOMAIN       = 'pub-c5822af30923465a9d44f6fb66d71da6.r2.dev';
 const CDN_IMG_PATTERN = new RegExp(R2_DOMAIN.replace(/\./g, '\\.'));
 
-const MAX_IMG_BYTES = 100 * 1024 * 1024; // 100 MB (shared across origin)
+const MAX_IMG_COUNT = 5000; // max images to keep in cache (FIFO)
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
@@ -122,18 +122,13 @@ function networkFirst(request, cacheName) {
     .catch(() => caches.match(request));
 }
 
-// ── Cache size trim (size-based, FIFO) ───────────────────────────────────────
+// ── Cache count trim (count-based, FIFO) ─────────────────────────────────────
 async function trimCache(cacheName) {
-  if (!navigator.storage || !navigator.storage.estimate) return;
-  const estimate = await navigator.storage.estimate();
-  const used = estimate.usage || 0;
-  if (used < MAX_IMG_BYTES) return;
-
   const cache = await caches.open(cacheName);
   const keys  = await cache.keys();
-  for (const key of keys) {
-    await cache.delete(key);
-    const newEstimate = await navigator.storage.estimate();
-    if ((newEstimate.usage || 0) < MAX_IMG_BYTES) break;
-  }
+  if (keys.length <= MAX_IMG_COUNT) return;
+
+  // Delete oldest entries until we're back under the limit
+  const toDelete = keys.slice(0, keys.length - MAX_IMG_COUNT);
+  await Promise.all(toDelete.map(key => cache.delete(key)));
 }
