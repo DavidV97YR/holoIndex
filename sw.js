@@ -1,18 +1,18 @@
 // holoIndex Service Worker
 // Strategy:
-//   - App shell (HTML, fonts): cache-first with background refresh
-//   - CSV data sheets: stale-while-revalidate (instant on repeat visits)
+//   - App shell (HTML, CSS, JS, fonts): cache-first with background refresh
+//   - CSV data sheets: stale-while-revalidate (instant load, fresh in background)
+//   - Images (avatars, event images): cache-first (immutable URLs)
 //   - Everything else: network-first with cache fallback
 
 // ── VERSIONING ──
 // Bump SHELL_CACHE whenever any file in SHELL_FILES changes (HTML/CSS/JS).
 // Bump DATA_CACHE only if the CSV cache layout itself changes (rare).
-const SHELL_CACHE = 'holoindex-shell-v2';
-const DATA_CACHE  = 'holoindex-data-v1';
+const SHELL_CACHE = 'holoindex-shell-v3';
+const DATA_CACHE  = 'holoindex-data-v2';
+const IMG_CACHE   = 'holoindex-img-v1';
 
 // App shell — cached on install for offline use.
-// Paths are scoped to the GitHub Pages deploy at /holoIndex/.
-// addAll() is atomic: if any URL 404s, the whole install fails.
 const SHELL_FILES = [
   '/holoIndex/',
   '/holoIndex/index.html',
@@ -26,21 +26,23 @@ const SHELL_FILES = [
   '/holoIndex/icons/icon-512.png'
 ];
 
-const CSV_PATTERN = /docs\.google\.com.*output=csv/;
+const CSV_PATTERN  = /docs\.google\.com.*output=csv/;
 const FONT_PATTERN = /fonts\.(googleapis|gstatic)\.com/;
 
-// ── Install: pre-cache the app shell ──────────────────────────────────────────
+const MAX_IMG_ENTRIES = 300;
+
+// ── Install: pre-cache the app shell ─────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
       .then(cache => cache.addAll(SHELL_FILES))
-      .then(() => self.skipWaiting()) // activate immediately, don't wait for old SW to die
+      .then(() => self.skipWaiting())
   );
 });
 
 // ── Activate: delete outdated caches ─────────────────────────────────────────
 self.addEventListener('activate', event => {
-  const validCaches = [SHELL_CACHE, DATA_CACHE];
+  const validCaches = [SHELL_CACHE, DATA_CACHE, IMG_CACHE];
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
@@ -48,7 +50,7 @@ self.addEventListener('activate', event => {
           .filter(k => !validCaches.includes(k))
           .map(k => caches.delete(k))
       ))
-      .then(() => self.clients.claim()) // take control of all open tabs immediately
+      .then(() => self.clients.claim())
   );
 });
 
@@ -58,21 +60,26 @@ self.addEventListener('fetch', event => {
   const url = request.url;
 
   // CSV data sheets — stale-while-revalidate
-  // Serve cached version instantly, fetch fresh copy in background
   if (CSV_PATTERN.test(url)) {
     event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
     return;
   }
 
-  // Google Fonts — cache-first (font files never change for a given URL)
+  // Google Fonts — cache-first
   if (FONT_PATTERN.test(url)) {
-    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    event.respondWith(cacheFirst(request, SHELL_CACHE, false));
     return;
   }
 
-  // App shell HTML — cache-first with background refresh
+  // Images — cache-first (avatar/event images from AvatarURL/ImageURL fields)
+  if (request.destination === 'image') {
+    event.respondWith(cacheFirst(request, IMG_CACHE, true));
+    return;
+  }
+
+  // App shell — cache-first with background refresh
   if (request.mode === 'navigate' || SHELL_FILES.some(f => url.includes(f))) {
-    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    event.respondWith(cacheFirst(request, SHELL_CACHE, false));
     return;
   }
 
@@ -82,7 +89,6 @@ self.addEventListener('fetch', event => {
 
 // ── Strategies ────────────────────────────────────────────────────────────────
 
-// Serve from cache instantly; update cache in background
 function staleWhileRevalidate(request, cacheName) {
   return caches.open(cacheName).then(cache =>
     cache.match(request).then(cached => {
@@ -91,26 +97,27 @@ function staleWhileRevalidate(request, cacheName) {
           if (resp.ok) cache.put(request, resp.clone());
           return resp;
         })
-        .catch(() => cached); // if network fails, the in-flight promise resolves to cached
+        .catch(() => cached);
       return cached || fresh;
     })
   );
 }
 
-// Serve from cache; only hit network if not cached
-function cacheFirst(request, cacheName) {
+function cacheFirst(request, cacheName, trim) {
   return caches.open(cacheName).then(cache =>
     cache.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(resp => {
-        if (resp.ok) cache.put(request, resp.clone());
+        if (resp.ok) {
+          cache.put(request, resp.clone());
+          if (trim) trimCache(cacheName, MAX_IMG_ENTRIES);
+        }
         return resp;
       });
     })
   );
 }
 
-// Hit network first; fall back to cache if offline
 function networkFirst(request, cacheName) {
   return fetch(request)
     .then(resp => {
@@ -120,4 +127,13 @@ function networkFirst(request, cacheName) {
       return resp;
     })
     .catch(() => caches.match(request));
+}
+
+// ── Cache size trim (FIFO) ────────────────────────────────────────────────────
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys  = await cache.keys();
+  if (keys.length > maxEntries) {
+    await Promise.all(keys.slice(0, keys.length - maxEntries).map(k => cache.delete(k)));
+  }
 }
