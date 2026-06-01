@@ -1,7 +1,7 @@
 // holoIndex Service Worker
 // Strategy:
 //   - App shell (HTML, CSS, JS, fonts): cache-first with background refresh
-//   - CSV data sheets: stale-while-revalidate (instant load, fresh in background)
+//   - CSV data sheets: network-first (always fresh; cache fallback when offline)
 //   - Images (avatars, event images): cache-first (immutable URLs)
 //   - Everything else: network-first with cache fallback
 
@@ -56,7 +56,7 @@ self.addEventListener('fetch', event => {
   const url = request.url;
 
   if (CSV_PATTERN.test(url)) {
-    event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
+    event.respondWith(networkFirst(request, DATA_CACHE));
     return;
   }
 
